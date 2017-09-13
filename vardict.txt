@@ -1,0 +1,1 @@
+{"RDpath": "C:\\Users\\wlieurance\\Documents\\AIMRD.sqlite", "DIMApath": "G:\\RA\\Project Partners\\BLM\\AIM\\Data\\Field Data\\NV\\State\\Compilations\\2011-2016\\NVAIM AllDistricts_DIMA 4.1b_2011-2016.mdb"}
