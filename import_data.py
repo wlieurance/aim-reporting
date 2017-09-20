@@ -1,10 +1,8 @@
+import math
+import sqlalchemy
+import pyodbc
+
 def ImportFromAccess(DIMApath, RDpath, form = None):
-    import tkinter
-    from tkinter import Tk, Label
-    import sqlalchemy #needed for sqlite interface
-    import pyodbc #needed for MS Access interface
-    import math
-    from sqlalchemy import text, create_engine, MetaData, Table
 
     pyodbc.lowercase = False
     log = ""
@@ -16,9 +14,9 @@ def ImportFromAccess(DIMApath, RDpath, form = None):
 
     ### connect to SQLite3 DB
     RDconstring = "sqlite:///" + RDpath
-    engine = create_engine(RDconstring)
+    engine = sqlalchemy.create_engine(RDconstring)
     connection = engine.connect()
-    meta = MetaData()
+    meta = sqlalchemy.MetaData()
 
     ### get the names of tables to transfer between databases
     result = connection.execute("SELECT TableName, ImportTable, FieldString, DeleteTable FROM TablesToImport ORDER BY TableName").fetchall()
@@ -42,9 +40,9 @@ def ImportFromAccess(DIMApath, RDpath, form = None):
             form.lblAction.update_idletasks()
         if row['DeleteTable'] == 1:
             print("Deleting rows in", r, "...")
-            SQL = text("DELETE FROM " + r)
+            SQL = sqlalchemy.text("DELETE FROM " + r)
             connection.execute(SQL)
-        table = Table(i, meta, autoload=True, autoload_with=engine)
+        table = sqlalchemy.Table(i, meta, autoload=True, autoload_with=engine)
 
         ### determine which fields to import and then construct relevant SQL
         fieldstring = ""
@@ -76,7 +74,7 @@ def ImportFromAccess(DIMApath, RDpath, form = None):
         
         ### transfer blocks of data with an SQL INSERT statement, keeping each block <= 999 values and iterating till finished
         for t in range(rowiter):
-            try:
+        #    try:
                 rows = dcur.fetchmany(maxrows)
                 if len(rows) > 0:
                     dicmat = []
@@ -92,11 +90,12 @@ def ImportFromAccess(DIMApath, RDpath, form = None):
                     form.pBar.update_idletasks()
                     form.pBar2.step(len(rows))
                     form.pBar2.update_idletasks()
-            except ValueError as err:
-                log += "Import failed for " + r + " due to scientific format in number field (too large or too small)." + '\n'
-                print("Import failed for: " + r + " due to scientific format in  number field (too large or too small).")
-                break
+            #except ValueError as err:
+            #    log += "Import failed for " + r + " due to scientific format in number field (too large or too small)." + '\n'
+            #    print("Import failed for: " + r + " due to scientific format in  number field (too large or too small).")
+            #    break
     connection.execute("VACUUM")  #Compresses and defrags database
+
     ### close open connections
     dcur.close()
     connection.close()

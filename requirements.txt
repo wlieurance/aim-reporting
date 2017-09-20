@@ -1,0 +1,11 @@
+numpy
+xlsxwriter
+sqlalchemy
+pyodbc
+#tkinter --may need to install manually if not pre-installed
+
+##comes with python 3.x
+#math
+#json
+#sqlite3
+#csv
