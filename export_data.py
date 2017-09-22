@@ -1,6 +1,6 @@
 import os
 import sqlalchemy
-import xlsxwriter
+import openpyxl
 
 import tkinter
 #separate imports needed due to tkinter idiosyncrasies
@@ -25,13 +25,13 @@ class ExportForm:
         self.lblExport = ttk.Label(child, text="Export:")
         self.lblExport.grid(row=0, column = 0, columnspan =3, sticky = "W")
 
-        self.lstCategory = tkinter.Listbox(child, selectmode = "MULTIPLE", exportselection =0)
+        self.lstCategory = tkinter.Listbox(child, selectmode = tkinter.EXTENDED, exportselection =0)
         self.lstCategory.grid(row=1, column = 0)
 
-        self.lstDataType = tkinter.Listbox(child, selectmode = "MULTIPLE", exportselection =0)
+        self.lstDataType = tkinter.Listbox(child, selectmode = tkinter.EXTENDED, exportselection =0)
         self.lstDataType.grid(row=1, column = 1)
 
-        self.lstScale = tkinter.Listbox(child, selectmode = "MULTIPLE", exportselection =0)
+        self.lstScale = tkinter.Listbox(child, selectmode = tkinter.EXTENDED, exportselection =0)
         self.lstScale.grid(row=1, column = 2)
 
         self.btnSelectAll = ttk.Button(child, text='Select All', style="TButton", command=self.selectall)
@@ -43,7 +43,7 @@ class ExportForm:
         self.btnExport = ttk.Button(child, text='Export Selection', style="TButton", command=self.exportselection)
         self.btnExport.grid(row=2, column = 2)
 
-        result = connection.execute("SELECT Category FROM Exports GROUP BY Category ORDER BY Category")
+        result = connection.execute("SELECT Category FROM Exports_All GROUP BY Category ORDER BY Category;")
         for row in result:
             # print(row)
             self.lstCategory.insert(tkinter.END, row['Category'])
@@ -59,13 +59,13 @@ class ExportForm:
                 value.append(w.get(c[i]))
             #print(value)
             self.valueCat = value
-            where = "'"
+            where1 = "'"
             for i in value:
-                where = where + "'" + i + "', "
-            where = where[1:len(where)-2]
-            result = connection.execute("SELECT DataType FROM Exports WHERE Category IN (" + where + ") GROUP BY DataType ORDER BY DataType")
+                where1 = where1 + "'" + i + "', "
+            where1 = where1[1:len(where1)-2]
+            s = "SELECT DataType FROM Exports_All WHERE Category IN (" + where1 + ") GROUP BY DataType ORDER BY DataType;"
+            result = connection.execute(s)
             for row in result:
-                #print(row)
                 self.lstDataType.insert(tkinter.END, row['DataType'])
 
         def onselect_DataType(evt):
@@ -78,15 +78,16 @@ class ExportForm:
                 value.append(w.get(c[i]))
             #print(value)
             self.valueData = value
-            where = "'"
+            where1 = "'"
             for i in value:
-                where = where + "'" + i + "', "
-            where = where[1:len(where)-2]
+                where1 = where1 + "'" + i + "', "
+            where1 = where1[1:len(where1)-2]
             where2 = "'"
             for i in self.valueCat:
                 where2 = where2 + "'" + i + "', "
             where2 = where2[1:len(where2)-2]
-            result = connection.execute("SELECT Scale FROM Exports WHERE DataType IN (" + where + ") AND Category IN (" + where2 + ") GROUP BY Scale ORDER BY Scale")
+            s = "SELECT Scale FROM Exports_All WHERE DataType IN ("+ where1 + ") AND Category IN (" + where2 + ") GROUP BY Scale ORDER BY Scale;"
+            result = connection.execute(s)
             for row in result:
                 #print(row)
                 self.lstScale.insert(tkinter.END, row['Scale'])
@@ -114,7 +115,7 @@ class ExportForm:
             value.append(self.lstCategory.get(c[i]))
         self.valueCat = value
 
-        result = self.connection.execute("SELECT DataType FROM Exports GROUP BY DataType ORDER BY DataType")
+        result = self.connection.execute("SELECT DataType FROM Exports_All GROUP BY DataType ORDER BY DataType;")
         for row in result:
             self.lstDataType.insert(tkinter.END, row['DataType'])
         self.lstDataType.select_set(0, tkinter.END)
@@ -125,7 +126,7 @@ class ExportForm:
             value.append(self.lstDataType.get(c[i]))
         self.valueData = value
 
-        result = self.connection.execute("SELECT Scale FROM Exports GROUP BY Scale ORDER BY Scale")
+        result = self.connection.execute("SELECT Scale FROM Exports_All GROUP BY Scale ORDER BY Scale;")
         for row in result:
             self.lstScale.insert(tkinter.END, row['Scale'])
         self.lstScale.select_set(0, tkinter.END)
@@ -157,46 +158,55 @@ class ExportForm:
             where3 = where3 + "'" + i + "', "
         where3 = where3[1:len(where3) - 2]
         #print(where1, " - ", where2, " - ", where3)
-
-        result = self.connection.execute("SELECT ObjectName, ExportName FROM Exports WHERE Category IN (" + where1 + ") AND DataType IN (" + where2 + ") AND Scale IN (" + where3 + ") ORDER BY Category, Scale, DataType, ExportName")
+        
+        #I know this sort of construction is subject to SQL injection attacks, but constructing it properly through sqlalchemy is super annoying.
+        s = "SELECT ObjectName, ExportName FROM Exports_All WHERE Category IN (" + where1 + ") AND DataType IN (" + where2 + ") AND Scale IN (" + where3 + ") ORDER BY Category, Scale, DataType, ExportName;"
+        result = self.connection.execute(s)
         path = tkinter.filedialog.asksaveasfilename(defaultextension = ".xlsx", title="Choose filename for export:", filetypes=(("Excel files", "*.xlsx"),("All files", "*.*")))
         if os.path.isfile(path):
             os.remove(path)
         if path:
             try:
-                workbook = xlsxwriter.Workbook(path)
-                exportEmpty = True
-                asked = False
+                #workbook = xlsxwriter.Workbook(path)
+                workbook = openpyxl.Workbook()
+                exportEmpty = True # this checks to see if the user wants to export empty views/tables
+                asked = False # this keeps track of whether the user was asked to export blanks or not
                 for row in result:
-                    r = 0
-                    c = 0
+                    if os.path.isfile(path):    
+                        workbook = openpyxl.load_workbook(filename = path)
+                    else:
+                        workbook = openpyxl.Workbook()
                     self.lblExport['text'] = "                                                                                          "
                     self.lblExport.update_idletasks()
                     self.lblExport['text'] = "Exporting " + row["ExportName"] + "..."
                     self.lblExport.update_idletasks()
-                    count2 = self.connection.execute("SELECT Count(*) FROM " + row["ObjectName"]).fetchone()[0]
                     result2 = self.connection.execute("SELECT * FROM " + row["ObjectName"])
-                    if count2 == 0:
+                    emptytest = result2.fetchone()
+                    result2 = self.connection.execute("SELECT * FROM " + row["ObjectName"]) #resents record set after fetchone(). Attempted SELECT Count(*) but kept getting MemoryErrors 
+                    if emptytest is None:
                         if not asked:
                             exportEmpty = tkinter.messagebox.askyesno("Export Blanks", "Export blank results?")
                             asked = True
-                    if count2 > 0 or (count2 == 0 and exportEmpty):          
+                    if emptytest is not None or (emptytest is None and exportEmpty):          
                         print("Exporting",row["ExportName"],"...")
-                        worksheet = workbook.add_worksheet(row["ExportName"])
+                        if os.path.isfile(path):
+                            worksheet = workbook.create_sheet(title=row["ExportName"])
+                        else:
+                            worksheet = workbook.active
+                            worksheet.title = row["ExportName"]
                         colnames = result2.keys()
-                        for i in colnames:
-                            worksheet.write(r, c, i)
-                            c += 1
-                        r = 1
+                        worksheet.append(colnames)
                         for row2 in result2:
-                            c = 0
-                            for i in colnames:
-                                worksheet.write(r, c, row2[i])
-                                c += 1
-                            r += 1
+                            d = dict(row2)
+                            for key, value in d.items(): #necessary in order to tell excel that strings starting with '=' are not formulas
+                                if isinstance(value, str):
+                                    if len(value) > 0:
+                                        if(value[0]=='='):
+                                            d[key]= ''.join(("'",value))
+                            worksheet.append(list(d.values()))
+                        workbook.save(path)
                     else:
                         print("Skipping",row["ExportName"],"...")
-                workbook.close()
                 print("Finished Exporting.")
                 tkinter.messagebox.showinfo("Success", "Export complete.")
                 self.lblExport['text'] = "Export:"

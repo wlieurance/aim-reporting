@@ -145,13 +145,6 @@ INSERT INTO Duration_GrowthHabit_Combinations (GrowthHabit, DurationTag, Use, Ca
 ('Graminoid', 'Biennial', 0, 'GrowthHabitSub'), 
 ('Sedge', 'Biennial', 0, 'GrowthHabitSub');
 
--- Table: ExecutionOrder
-INSERT INTO ExecutionOrder (RunOrder, Name) VALUES 
-(2, 'Cover_Line'), 
-(3, 'Dimensions_Line'), 
-(1, 'LPI_CanopyLayers_Point_DB_RestrictDates'), 
-(4, 'SoilStability_Line');
-
 -- Table: Exports
 INSERT INTO Exports (Category, DataType, Scale, ObjectName, ExportName) VALUES 
 ('Calculation', 'Cover', 'Line', 'Cover_Line', 'Cover_Line'), 
@@ -189,17 +182,6 @@ INSERT INTO HitCategories (HitCategory, Type) VALUES
 ('First', 'Foliar'), 
 ('Basal', 'Foliar'), 
 ('Height', 'Foliar');
-
--- Table: InsertViews
-INSERT INTO InsertViews (RunOrder, ViewName, InsertTable, ColumnString, ValueString, WhereStatement) VALUES 
-(0, 'LPI_Line_IndicatorsCalc', 'Cover_Line', NULL, 'SiteKey, PlotKey, LineKey, RecKey, SiteID, PlotID, LineID, FormDate, Method, LineSize, LineSizeUnits, Duration, IndicatorCategory, Indicator, HitCategory, IndicatorSum, CoverPct, ChkPct', 'HitCategory <> ''Height'''), 
-(0, 'LPI_Line_IndicatorsCalc', 'Dimensions_Line', NULL, 'SiteKey, PlotKey, LineKey, RecKey, SiteID, PlotID, LineID, FormDate, Method, LineSize, LineSizeUnits, Duration, IndicatorCategory, Indicator, HitCategory, ''Height'', HeightMean, HeightUnits', 'HeightMean IS NOT NULL'), 
-(0, 'LPI_CanopyLayers_Point_DB_RestrictDates_View', 'LPI_CanopyLayers_Point_DB_RestrictDates', NULL, NULL, NULL), 
-(1, 'LI_Line_Cover', 'Cover_Line', NULL, NULL, NULL), 
-(1, 'LI_Line_Height', 'Dimensions_Line', NULL, NULL, NULL), 
-(2, 'LI_Line_Length', 'Dimensions_Line', NULL, NULL, NULL), 
-(0, 'SoilStab_Line', 'SoilStability_Line', NULL, NULL, NULL), 
-(0, 'SR_Line', 'SpeciesRichness_Line', NULL, NULL, NULL);
 
 -- Table: LI_SizeClasses
 INSERT INTO LI_SizeClasses (StartOperator, StartLimit, EndOperator, EndLimit) VALUES 
@@ -259,7 +241,8 @@ INSERT INTO SoilStab_Codes (Code, Duration, Description, Category) VALUES
 -- Table: TablesToImport
 INSERT INTO TablesToImport (TableName, AppendDoNotUse, ImportTable, FieldString, DeleteTable) VALUES 
 ('tblCanopyGapDetail', 0, NULL, NULL, 1), 
-('tblCanopyGapHeader', 0, NULL, NULL, 1), 
+('tblCanopyGapHeader', 0, NULL, NULL, 1),
+('tblEcolSites', 0, NULL, NULL, 1), 
 ('tblGapDetail', 0, NULL, NULL, 1), 
 ('tblGapHeader', 0, NULL, NULL, 1), 
 ('tblLICDetail', 0, NULL, NULL, 1), 

@@ -1928,7 +1928,7 @@ INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, 
 VALUES(10.0,'QAQC_IIRH_MissingAttrComment_NotNS','Interpreting Indicators of Rangeland Health','Missing Data','If a Final Rating is anything other than None to Slight,there should be a comment.',NULL,'IIRH_MissingAttrComment_NotNS','Comment',NULL);
 
 CREATE VIEW QAQC_IIRH_MissingAttrComment_NotNS AS
-    SELECT x.RecKey || ';' || x.Description AS ErrorKey,
+	SELECT x.RecKey || ';' || x.Description AS ErrorKey,
            x.*
       FROM (
                SELECT c.SiteKey,
@@ -1999,10 +1999,10 @@ CREATE VIEW QAQC_IIRH_MissingAttrComment_NotNS AS
            )
            AS x
      WHERE trim(x.EcolSite) <> 'UNKNOWN' AND 
-           x.RatingCode IS NOT NULL AND 
-           x.RatingCode <> 'NS' AND 
-           x.Comment IS NOT NULL AND 
-           x.Comment <> '';
+           (x.RatingCode IS NOT NULL AND 
+           x.RatingCode <> 'NS') AND 
+           (x.Comment IS NULL OR 
+           x.Comment = '');
 		   
 		   
 --QAQC_IIRH_Detail_OrphanRecordCheck
@@ -2078,7 +2078,7 @@ CREATE VIEW QAQC_Lines_ElevationTypeIncorrect AS
 			  
 --QAQC_Lines_NorthTypeIncorrect
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
-VALUES(2.0,'QAQC_Lines_NorthTypeIncorrect','Line Definition','Form Option','The wrong type of North was used. If recorded correctly, these (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) VALUES should not be changed without converting the associated azimuth (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) VALUES.','(Magnetic = 1, True = 2)','Lines_NorthTypeIncorrect','NorthType','=2');
+VALUES(2.0,'QAQC_Lines_NorthTypeIncorrect','Line Definition','Form Option','The wrong type of North was used. Should not be changed without checking whether or not to convert the associated azimuth between geodetic and magnetic (or vice versa).','(Magnetic = 1, True = 2)','Lines_NorthTypeIncorrect','NorthType','=2');
 
 CREATE VIEW QAQC_Lines_NorthTypeIncorrect AS
     SELECT c.LineKey AS ErrorKey,
@@ -2369,7 +2369,7 @@ CREATE VIEW QAQC_LPI_HeightUOMIncorrect AS
            JOIN
            tblLPIHeader AS b ON a.LineKey = b.LineKey
      WHERE b.HeightUOM IS NULL OR 
-           b.HeightOption <> 'cm'
+           b.HeightUOM <> 'cm'
      ORDER BY a.SiteID,
               a.PlotID,
               a.LineID;
@@ -3316,6 +3316,7 @@ CREATE VIEW QAQC_Plot_MissingSoil AS
 			  
 			  
 --QAQC_Plot_MissingSoilSeries
+/*In order for this view to work properly, you need to populate the SoilSeries table with a list of valid soils.*/
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
 VALUES(6.0,'QAQC_Plot_MissingSoilSeries','Plot Definition','Missing Data','Soil Series missing.',NULL,'Plot_MissingSoilSeries','ESD_Series',NULL);
 
@@ -4469,6 +4470,9 @@ CREATE VIEW QAQC_SoilPit_RockFragmentsZero AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
+		   d.HorizonDepthUpper,
+		   d.HorizonDepthLower,
+		   d.ESD_Horizon,
            d.RockFragments
       FROM tblSites AS a
            JOIN
@@ -4480,7 +4484,9 @@ CREATE VIEW QAQC_SoilPit_RockFragmentsZero AS
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.RockFragments IS NULL OR 
             d.RockFragments = '' OR 
-            d.RockFragments = 0);
+            d.RockFragments = 0) AND
+           (d.ESD_Horizon IS NULL OR
+           d.ESD_Horizon <> 'R');
 			
 			
 --QAQC_SoilPit_Header_OrphanRecordCheck
@@ -4667,7 +4673,7 @@ CREATE VIEW QAQC_SR_SpecRichMethodIncorrect AS
            tblSpecRichHeader AS d ON c.LineKey = d.LineKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.SpecRichMethod IS NULL OR 
-            d.SpecRichMethod != 3);
+            d.SpecRichMethod != 4);
 			
 			
 --QAQC_SR_NumberSubPlotsIncorrect
@@ -5666,6 +5672,9 @@ CREATE VIEW QAQC_SoilPit_MissingEffervescence AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
+		   d.HorizonDepthUpper,
+		   d.HorizonDepthLower,
+		   d.ESD_Horizon,
            d.Effer
       FROM tblSites AS a
            JOIN
@@ -5676,7 +5685,9 @@ CREATE VIEW QAQC_SoilPit_MissingEffervescence AS
            tblSoilPitHorizons AS d ON c.SoilKey = d.SoilKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.Effer IS NULL OR 
-            d.Effer = '');
+            d.Effer = '') AND
+           (d.ESD_Horizon IS NULL OR
+           d.ESD_Horizon <> 'R');
 			
 			
 --QAQC_SoilPit_MissingColor
@@ -5689,6 +5700,9 @@ CREATE VIEW QAQC_SoilPit_MissingColor AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
+           d.HorizonDepthUpper,
+		   d.HorizonDepthLower,
+		   d.ESD_Horizon,
            d.ESD_Hue,
            d.ESD_Value,
            d.ESD_Chroma
@@ -5705,7 +5719,9 @@ CREATE VIEW QAQC_SoilPit_MissingColor AS
               d.ESD_Chroma IS NULL) OR 
              (d.ESD_Hue = '' OR 
               d.ESD_Value = '' OR 
-              d.ESD_Chroma = '') );
+              d.ESD_Chroma = '') ) AND
+           (d.ESD_Horizon IS NULL OR
+           d.ESD_Horizon <> 'R');
 			  
 			  
 --QAQC_SoilPit_ColorTypeIncorrect
@@ -5718,6 +5734,9 @@ CREATE VIEW QAQC_SoilPit_ColorTypeIncorrect AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
+           d.HorizonDepthUpper,
+		   d.HorizonDepthLower,
+		   d.ESD_Horizon,
            d.ESD_Color
       FROM tblSites AS a
            JOIN
@@ -5728,7 +5747,9 @@ CREATE VIEW QAQC_SoilPit_ColorTypeIncorrect AS
            tblSoilPitHorizons AS d ON c.SoilKey = d.SoilKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.ESD_Color IS NULL OR 
-            d.ESD_Color != 'Dry');
+            d.ESD_Color != 'Dry') AND
+           (d.ESD_Horizon IS NULL OR
+            d.ESD_Horizon <> 'R');
 			
 			
 --QAQC_SoilPit_MissingGrade
@@ -5741,7 +5762,10 @@ CREATE VIEW QAQC_SoilPit_MissingGrade AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
-           d.ESD_Grade
+           d.HorizonDepthUpper,
+		   d.HorizonDepthLower,
+           d.ESD_Horizon,
+		   d.ESD_Grade
       FROM tblSites AS a
            JOIN
            tblPlots AS b ON a.SiteKey = b.SiteKey
@@ -5751,7 +5775,9 @@ CREATE VIEW QAQC_SoilPit_MissingGrade AS
            tblSoilPitHorizons AS d ON c.SoilKey = d.SoilKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.ESD_Grade IS NULL OR 
-            d.ESD_Color = '');
+            d.ESD_Color = '') AND
+           (d.ESD_Horizon IS NULL OR
+           d.ESD_Horizon <> 'R');
 			
 			
 --QAQC_SoilPit_MissingSize
@@ -5764,7 +5790,10 @@ CREATE VIEW QAQC_SoilPit_MissingSize AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
-           d.ESD_Size
+           d.HorizonDepthUpper,
+           d.HorizonDepthLower,
+           d.ESD_Horizon,
+           d.ESD_Size 
       FROM tblSites AS a
            JOIN
            tblPlots AS b ON a.SiteKey = b.SiteKey
@@ -5774,7 +5803,9 @@ CREATE VIEW QAQC_SoilPit_MissingSize AS
            tblSoilPitHorizons AS d ON c.SoilKey = d.SoilKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.ESD_Size IS NULL OR 
-            d.ESD_Size = '');
+            d.ESD_Size = '') AND
+           (d.ESD_Horizon IS NULL OR
+           d.ESD_Horizon <> 'R');
 			
 			
 --QAQC_SoilPit_MissingStructure
@@ -5787,6 +5818,9 @@ CREATE VIEW QAQC_SoilPit_MissingStructure AS
            a.SiteName,
            b.PlotID,
            c.DateRecorded,
+		   d.HorizonDepthUpper,
+		   d.HorizonDepthLower,
+		   d.ESD_Horizon,
            d.ESD_Structure
       FROM tblSites AS a
            JOIN
@@ -5797,7 +5831,9 @@ CREATE VIEW QAQC_SoilPit_MissingStructure AS
            tblSoilPitHorizons AS d ON c.SoilKey = d.SoilKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') AND 
            (d.ESD_Structure IS NULL OR 
-            d.ESD_Structure = '');
+            d.ESD_Structure = '') AND
+           (d.ESD_Horizon IS NULL OR
+           d.ESD_Horizon <> 'R');
 
 			
 --QAQC_SR_SpecRichDim2Incorrect
@@ -5889,7 +5925,7 @@ CREATE VIEW QAQC_SR_SpecRichDim2Incorrect AS
            AS d ON c.LineKey = d.LineKey
      WHERE (d.SubPlot = '1' AND 
             (d.SpecRichDim2 IS NULL OR 
-             d.SpecRichDim2 != 2) ) OR 
+             d.SpecRichDim2 != 30) ) OR 
            (d.SubPlot = '2' AND 
             (d.SpecRichDim2 IS NULL OR 
              d.SpecRichDim2 != 0) ) OR 
@@ -6001,34 +6037,27 @@ CREATE VIEW QAQC_SR_SpecRichAreaIncorrect AS
            AS d ON c.LineKey = d.LineKey
      WHERE (d.SubPlot = '1' AND 
             (d.SpecRichArea IS NULL OR 
-             d.SpecRichArea != 2827.431) ) OR 
+             Round(d.SpecRichArea,3) != 2827.431) ) OR 
            (d.SubPlot = '2' AND 
             (d.SpecRichArea IS NULL OR 
-             d.SpecRichArea != 0) ) OR 
+             Round(d.SpecRichArea,3) != 0.000) ) OR 
            (d.SubPlot = '3' AND 
             (d.SpecRichArea IS NULL OR 
-             d.SpecRichArea != 0) ) OR 
+             Round(d.SpecRichArea,3) != 0.000) ) OR 
            (d.SubPlot = '4' AND 
             (d.SpecRichArea IS NULL OR 
-             d.SpecRichArea != 0) ) OR 
+             Round(d.SpecRichArea,3) != 0.000) ) OR 
            (d.SubPlot = '5' AND 
             (d.SpecRichArea IS NULL OR 
-             d.SpecRichArea != 0) ) OR 
+             Round(d.SpecRichArea,3) != 0.000) ) OR 
            (d.SubPlot = '6' AND 
             (d.SpecRichArea IS NULL OR 
-             d.SpecRichArea != 0) ) 
+             Round(d.SpecRichArea,3) != 0.000) ) 
      ORDER BY a.SiteID,
               b.PlotID,
               c.LineID,
               d.FormDate,
               d.SubPlot;
-
-			  
---Populate Export Table with QAQC
-INSERT INTO Exports
-SELECT 'QAQC' AS Category, Method AS DataType, 'Raw' AS Scale, QueryName AS ObjectName, ExportID As ExportName
-  FROM QAQC_Queries
- ORDER BY Method, Function, QueryOrder;
 			  
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;

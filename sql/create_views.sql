@@ -1,7 +1,8 @@
 PRAGMA foreign_keys = off;
 
-BEGIN TRANSACTION;-- View: CodeTags_CodeCount
+BEGIN TRANSACTION;
 
+-- View: CodeTags_CodeCount
 CREATE VIEW CodeTags_CodeCount AS
     SELECT Category,
            Tag,
@@ -10,8 +11,9 @@ CREATE VIEW CodeTags_CodeCount AS
      GROUP BY Category,
               Tag
      ORDER BY Category,
-              Tag;-- View: CodeTags_Grouped
-
+              Tag;
+			  
+-- View: CodeTags_Grouped
 CREATE VIEW CodeTags_Grouped AS
     SELECT Category,
            Tag
@@ -20,8 +22,9 @@ CREATE VIEW CodeTags_Grouped AS
      GROUP BY Tag,
               Category
      ORDER BY Category,
-              Tag;-- View: Cover_Line
-
+              Tag;
+			  
+-- View: Cover_Line
 CREATE VIEW Cover_Line AS
     SELECT SiteKey,
            PlotKey,
@@ -53,8 +56,9 @@ CREATE VIEW Cover_Line AS
               Method,
               IndicatorCategory,
               Indicator,
-              Duration;-- View: Cover_Plot
-
+              Duration;
+			  
+-- View: Cover_Plot
 CREATE VIEW Cover_Plot AS
     SELECT SiteKey,
            PlotKey,
@@ -92,8 +96,9 @@ CREATE VIEW Cover_Plot AS
               IndicatorCategory,
               Indicator,
               HitCategory,
-              Duration;-- View: Cover_Tag
-
+              Duration;
+			  
+-- View: Cover_Tag
 CREATE VIEW Cover_Tag AS
     SELECT a.Tag,
            b.Method,
@@ -120,8 +125,9 @@ CREATE VIEW Cover_Tag AS
               b.Duration,
               b.IndicatorCategory,
               b.Indicator,
-              b.HitCategory;-- View: Dimensions_Line
-
+              b.HitCategory;
+			  
+-- View: Dimensions_Line
 CREATE VIEW Dimensions_Line AS
     SELECT SiteKey,
            PlotKey,
@@ -193,8 +199,9 @@ CREATE VIEW Dimensions_Line AS
               HitCategory,
               Dimension,
               Indicator,
-              Duration;-- View: Dimensions_Plot
-
+              Duration;
+			  
+-- View: Dimensions_Plot
 CREATE VIEW Dimensions_Plot AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -235,8 +242,9 @@ CREATE VIEW Dimensions_Plot AS
               IndicatorCategory,
               Indicator,
               Dimension,
-              Duration;-- View: Dimensions_Tag
-
+              Duration;
+			  
+-- View: Dimensions_Tag
 CREATE VIEW Dimensions_Tag AS
     SELECT a.Tag,
            b.Method,
@@ -265,8 +273,9 @@ CREATE VIEW Dimensions_Tag AS
               b.Duration,
               b.IndicatorCategory,
               b.Indicator,
-              b.Dimension;-- View: Duration_GrowthHabit_Combinations_ghTags
-
+              b.Dimension;
+			  
+-- View: Duration_GrowthHabit_Combinations_ghTags
 CREATE VIEW Duration_GrowthHabit_Combinations_ghTags AS
     SELECT a.GrowthHabit AS GHTag,
            b.Tag AS DurationTag,
@@ -280,8 +289,9 @@ CREATE VIEW Duration_GrowthHabit_Combinations_ghTags AS
            b.Use = 1
      GROUP BY a.GrowthHabit,
               b.Tag,
-              b.Use;-- View: Duration_GrowthHabit_Combinations_Use
-
+              b.Use;
+			  
+-- View: Duration_GrowthHabit_Combinations_Use
 CREATE VIEW Duration_GrowthHabit_Combinations_Use AS
     SELECT a.*,
            b.CodeCount,
@@ -289,15 +299,17 @@ CREATE VIEW Duration_GrowthHabit_Combinations_Use AS
       FROM Duration_GrowthHabit_Combinations_ghTags AS a
            JOIN
            CodeTags_CodeCount AS b ON a.DurationTag = b.Tag
-     WHERE TagUse = 1;-- View: Duration_GrowthHabit_Combinations_Use_Count
-
+     WHERE TagUse = 1;
+	 
+-- View: Duration_GrowthHabit_Combinations_Use_Count
 CREATE VIEW Duration_GrowthHabit_Combinations_Use_Count AS
     SELECT GHTag,
            Count(DurationTag) AS DurationCount
       FROM Duration_GrowthHabit_Combinations_Use
      GROUP BY GHTag
-     ORDER BY GHTag;-- View: Duration_GrowthHabitSub_Combinations_AllTags
-
+     ORDER BY GHTag;
+	 
+-- View: Duration_GrowthHabitSub_Combinations_AllTags
 CREATE VIEW Duration_GrowthHabitSub_Combinations_AllTags AS
     SELECT a.GHTag,
            b.Tag AS DurationTag,
@@ -308,8 +320,9 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_AllTags AS
      GROUP BY GHTag,
               DurationTag
      ORDER BY a.GHTag,
-              b.Tag;-- View: Duration_GrowthHabitSub_Combinations_Final
-
+              b.Tag;
+			  
+-- View: Duration_GrowthHabitSub_Combinations_Final
 CREATE VIEW Duration_GrowthHabitSub_Combinations_Final AS
     SELECT a.*,
            b.CodeCount,
@@ -319,8 +332,9 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_Final AS
            CodeTags_CodeCount AS b ON a.DurationTag = b.Tag
      WHERE UseDurationTag = 1
      ORDER BY a.GHTag,
-              a.DurationTag;-- View: Duration_GrowthHabitSub_Combinations_ghTags
-
+              a.DurationTag;
+			  
+-- View: Duration_GrowthHabitSub_Combinations_ghTags
 CREATE VIEW Duration_GrowthHabitSub_Combinations_ghTags AS
     SELECT a.Tag AS GHTag,
            b.DurationTag AS Duration
@@ -331,8 +345,9 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_ghTags AS
      GROUP BY a.Tag,
               b.DurationTag
      ORDER BY a.Tag,
-              b.DurationTag;-- View: Duration_GrowthHabitSub_Combinations_Use
-
+              b.DurationTag;
+			  
+-- View: Duration_GrowthHabitSub_Combinations_Use
 CREATE VIEW Duration_GrowthHabitSub_Combinations_Use AS
     SELECT a.GHTag,
            a.DurationTag,
@@ -350,15 +365,17 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_Use AS
     HAVING GHUse = 1 AND 
            DurationUse = 1
      ORDER BY GHTag,
-              DurationTag;-- View: Duration_GrowthHabitSub_Combinations_Use_Count
-
+              DurationTag;
+			  
+-- View: Duration_GrowthHabitSub_Combinations_Use_Count
 CREATE VIEW Duration_GrowthHabitSub_Combinations_Use_Count AS
     SELECT GHTag,
            Count(GHTag) AS GHCount
       FROM Duration_GrowthHabitSub_Combinations_Use
      GROUP BY GHTag
-     ORDER BY GHTag;-- View: Duration_SpeciesTags
-
+     ORDER BY GHTag;
+	 
+-- View: Duration_SpeciesTags
 CREATE VIEW Duration_SpeciesTags AS
     SELECT a.Tag,
            b.Duration
@@ -369,8 +386,9 @@ CREATE VIEW Duration_SpeciesTags AS
      GROUP BY Tag,
               Duration
      ORDER BY Tag,
-              Duration;-- View: Duration_SpeciesTags_Combinations_Use
-
+              Duration;
+			  
+-- View: Duration_SpeciesTags_Combinations_Use
 CREATE VIEW Duration_SpeciesTags_Combinations_Use AS
     SELECT a.Tag AS SpeciesTag,
            b.Tag AS DurationTag
@@ -380,15 +398,17 @@ CREATE VIEW Duration_SpeciesTags_Combinations_Use AS
      WHERE b.Category = 'Duration' AND 
            b.Use = 1
      GROUP BY SpeciesTag,
-              DurationTag;-- View: Duration_SpeciesTags_Combinations_Use_Count
-
+              DurationTag;
+			  
+-- View: Duration_SpeciesTags_Combinations_Use_Count
 CREATE VIEW Duration_SpeciesTags_Combinations_Use_Count AS
     SELECT SpeciesTag,
            Count(DurationTag) AS DurationCount
       FROM Duration_SpeciesTags_Combinations_Use
      GROUP BY SpeciesTag
-     ORDER BY SpeciesTag;-- View: IIRH_Raw
-
+     ORDER BY SpeciesTag;
+	 
+-- View: IIRH_Raw
 CREATE VIEW IIRH_Raw AS
     SELECT d.SiteKey,
            c.PlotKey,
@@ -480,8 +500,9 @@ CREATE VIEW IIRH_Raw AS
      ORDER BY SIteID,
               PlotID,
               a.Seq,
-              Description;-- View: joinSitePlot
-
+              Description;
+			  
+-- View: joinSitePlot
 CREATE VIEW joinSitePlot AS
     SELECT a.SiteKey,
            a.SiteID,
@@ -491,8 +512,9 @@ CREATE VIEW joinSitePlot AS
       FROM tblSites AS a
            JOIN
            tblPlots AS b ON a.SiteKey = b.SiteKey
-     WHERE a.SiteKey NOT IN ('888888888', '999999999');-- View: joinSitePlotLine
-
+     WHERE a.SiteKey NOT IN ('888888888', '999999999');
+	 
+-- View: joinSitePlotLine
 CREATE VIEW joinSitePlotLine AS
     SELECT a.SiteKey,
            a.SiteID,
@@ -506,8 +528,9 @@ CREATE VIEW joinSitePlotLine AS
            tblPlots AS b ON a.SiteKey = b.SiteKey
            JOIN
            tblLines AS c ON b.PlotKey = c.PlotKey
-     WHERE a.SiteKey NOT IN ('888888888', '999999999');-- View: LI_Detail_View
-
+     WHERE a.SiteKey NOT IN ('888888888', '999999999');
+	 
+-- View: LI_Detail_View
 CREATE VIEW LI_Detail_View AS
     SELECT RecKey,
            'Gap Intercept' AS Method,
@@ -542,8 +565,9 @@ CREATE VIEW LI_Detail_View AS
            tblCanopyGapHeader AS b ON a.RecKey = b.RecKey
      ORDER BY RecKey,
               Method,
-              SegStart;-- View: LI_Header_View
-
+              SegStart;
+			  
+-- View: LI_Header_View
 CREATE VIEW LI_Header_View AS
     SELECT LineKey,
            RecKey,
@@ -636,8 +660,9 @@ CREATE VIEW LI_Header_View AS
                )
      ORDER BY LineKey,
               RecKey,
-              Method;-- View: LI_Line_Cover
-
+              Method;
+			  
+-- View: LI_Line_Cover
 CREATE VIEW LI_Line_Cover AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -670,8 +695,9 @@ CREATE VIEW LI_Line_Cover AS
               c.Method,
               c.IndicatorCategory,
               c.Indicator,
-              c.Duration;-- View: LI_Line_Height
-
+              c.Duration;
+			  
+-- View: LI_Line_Height
 CREATE VIEW LI_Line_Height AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -705,8 +731,9 @@ CREATE VIEW LI_Line_Height AS
               c.Method,
               c.IndicatorCategory,
               c.Indicator,
-              c.Duration;-- View: LI_Line_IndicatorsCartesian
-
+              c.Duration;
+			  
+-- View: LI_Line_IndicatorsCartesian
 CREATE VIEW LI_Line_IndicatorsCartesian AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -767,8 +794,9 @@ CREATE VIEW LI_Line_IndicatorsCartesian AS
               Method,
               IndicatorCategory,
               Indicator,
-              Duration;-- View: LI_Line_Length
-
+              Duration;
+			  
+-- View: LI_Line_Length
 CREATE VIEW LI_Line_Length AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -802,8 +830,9 @@ CREATE VIEW LI_Line_Length AS
               c.Method,
               c.IndicatorCategory,
               c.Indicator,
-              c.Duration;-- View: LI_LineCalc
-
+              c.Duration;
+			  
+-- View: LI_LineCalc
 CREATE VIEW LI_LineCalc AS
     SELECT a.LineKey,
            b.RecKey,
@@ -836,8 +865,9 @@ CREATE VIEW LI_LineCalc AS
               b.SegType,
               b.IndicatorCategory,
               b.Indicator,
-              b.Duration;-- View: LI_LineSum
-
+              b.Duration;
+			  
+-- View: LI_LineSum
 CREATE VIEW LI_LineSum AS
     SELECT RecKey,
            Method,
@@ -1128,8 +1158,9 @@ CREATE VIEW LI_LineSum AS
               SegType,
               IndicatorCategory,
               Indicator,
-              Duration;-- View: LI_LineSum_Indicators
-
+              Duration;
+			  
+-- View: LI_LineSum_Indicators
 CREATE VIEW LI_LineSum_Indicators AS
     SELECT a.RecKey,
            a.Method,
@@ -1153,8 +1184,9 @@ CREATE VIEW LI_LineSum_Indicators AS
               a.SegType,
               a.IndicatorCategory,
               a.Indicator,
-              a.Duration;-- View: LI_Plot_Species
-
+              a.Duration;
+			  
+-- View: LI_Plot_Species
 CREATE VIEW LI_Plot_Species AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -1174,8 +1206,9 @@ CREATE VIEW LI_Plot_Species AS
               d.ScientificName
      ORDER BY a.SiteID,
               a.PlotID,
-              d.ScientificName;-- View: LI_PlotsLinesForms
-
+              d.ScientificName;
+			  
+-- View: LI_PlotsLinesForms
 CREATE VIEW LI_PlotsLinesForms AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -1202,8 +1235,9 @@ CREATE VIEW LI_PlotsLinesForms AS
               LineID,
               b.Method,
               FormDate,
-              SegType;-- View: LI_Raw_Final
-
+              SegType;
+			  
+-- View: LI_Raw_Final
 CREATE VIEW LI_Raw_Final AS
     SELECT e.SiteID,
            e.SiteName,
@@ -1224,8 +1258,9 @@ CREATE VIEW LI_Raw_Final AS
               PlotID,
               LineID,
               FormDate,
-              SegStart;-- View: Line_Definition
-
+              SegStart;
+			  
+-- View: Line_Definition
 CREATE VIEW Line_Definition AS
     SELECT c.SiteKey,
            b.PlotKey,
@@ -1259,11 +1294,9 @@ CREATE VIEW Line_Definition AS
            tblSites AS c ON b.SiteKey = c.SiteKey
      ORDER BY SiteID,
               PlotID,
-              LineID;-- View: LoadExtensions
-
-CREATE VIEW LoadExtensions AS
-    SELECT load_extension('G:\\RA\\Project Partners\\BLM\\AIM\\Data\\Tools\\Reporting Database\\dev\\Libraries\\libsqlitefunctions.dll');-- View: LPI_CanopyDefinitions
-
+              LineID;
+			  
+-- View: LPI_CanopyDefinitions
 CREATE VIEW LPI_CanopyDefinitions AS
     SELECT *,
            CASE WHEN instr(CategoryConcat, 'Top') != 0 THEN 'Cover' WHEN (instr(CategoryConcat, 'Top') = 0 AND 
@@ -1273,8 +1306,9 @@ CREATE VIEW LPI_CanopyDefinitions AS
               PlotID,
               LineID,
               FormDate,
-              PointNbr;-- View: LPI_CanopyDefinitions_CategoryConcat
-
+              PointNbr;
+			  
+-- View: LPI_CanopyDefinitions_CategoryConcat
 CREATE VIEW LPI_CanopyDefinitions_CategoryConcat AS
     SELECT SiteKey,
            PlotKey,
@@ -1293,8 +1327,9 @@ CREATE VIEW LPI_CanopyDefinitions_CategoryConcat AS
               PlotID,
               LineID,
               FormDate,
-              PointNbr;-- View: LPI_CanopyLayers_Point_DB_RestrictDates
-
+              PointNbr;
+			  
+-- View: LPI_CanopyLayers_Point_DB_RestrictDates
 CREATE VIEW LPI_CanopyLayers_Point_DB_RestrictDates AS
     SELECT *
       FROM LPI_CanopyLayers_Point_DB_UNION
@@ -1313,8 +1348,9 @@ CREATE VIEW LPI_CanopyLayers_Point_DB_RestrictDates AS
               LineID,
               FormDate,
               PointNbr,
-              Rank;-- View: LPI_CanopyLayers_Point_DB_UNION
-
+              Rank;
+			  
+-- View: LPI_CanopyLayers_Point_DB_UNION
 CREATE VIEW LPI_CanopyLayers_Point_DB_UNION AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -1584,8 +1620,9 @@ CREATE VIEW LPI_CanopyLayers_Point_DB_UNION AS
               LineID,
               FormDate,
               PointNbr,
-              Rank;-- View: LPI_CanopyLayers_Point_Duration_Foliar
-
+              Rank;
+			  
+-- View: LPI_CanopyLayers_Point_Duration_Foliar
 CREATE VIEW LPI_CanopyLayers_Point_Duration_Foliar AS
     SELECT SiteKey,
            PlotKey,
@@ -1733,8 +1770,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Duration_Foliar AS
               PointNbr,
               Duration,
               Indicator,
-              HitCategory;-- View: LPI_CanopyLayers_Point_Duration_GrowthHabit
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_Duration_GrowthHabit
 CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabit AS
     SELECT SiteKey,
            PlotKey,
@@ -1905,8 +1943,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabit AS
               PointNbr,
               Indicator,
               Duration,
-              HitCategory;-- View: LPI_CanopyLayers_Point_Duration_GrowthHabitSub
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_Duration_GrowthHabitSub
 CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabitSub AS
     SELECT SiteKey,
            PlotKey,
@@ -2054,8 +2093,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabitSub AS
               PointNbr,
               Indicator,
               Duration,
-              HitCategory;-- View: LPI_CanopyLayers_Point_Duration_SpeciesTags
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_Duration_SpeciesTags
 CREATE VIEW LPI_CanopyLayers_Point_Duration_SpeciesTags AS
     SELECT SiteKey,
            PlotKey,
@@ -2187,8 +2227,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Duration_SpeciesTags AS
               PointNbr,
               Indicator,
               Duration,
-              HitCategory;-- View: LPI_CanopyLayers_Point_Foliar
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_Foliar
 CREATE VIEW LPI_CanopyLayers_Point_Foliar AS
     SELECT SiteKey,
            PlotKey,
@@ -2287,8 +2328,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Foliar AS
               FormDate,
               PointNbr,
               Indicator,
-              HitCategory;-- View: LPI_CanopyLayers_Point_GroundCover
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_GroundCover
 CREATE VIEW LPI_CanopyLayers_Point_GroundCover AS
     SELECT SiteKey,
            PlotKey,
@@ -2322,8 +2364,9 @@ CREATE VIEW LPI_CanopyLayers_Point_GroundCover AS
               PlotID,
               LineID,
               FormDate,
-              PointNbr;-- View: LPI_CanopyLayers_Point_GrowthHabit
-
+              PointNbr;
+			  
+-- View: LPI_CanopyLayers_Point_GrowthHabit
 CREATE VIEW LPI_CanopyLayers_Point_GrowthHabit AS
     SELECT SiteKey,
            PlotKey,
@@ -2481,8 +2524,9 @@ CREATE VIEW LPI_CanopyLayers_Point_GrowthHabit AS
               FormDate,
               PointNbr,
               Indicator,
-              HitCategory;-- View: LPI_CanopyLayers_Point_GrowthHabitSub
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_GrowthHabitSub
 CREATE VIEW LPI_CanopyLayers_Point_GrowthHabitSub AS
     SELECT SiteKey,
            PlotKey,
@@ -2617,8 +2661,9 @@ CREATE VIEW LPI_CanopyLayers_Point_GrowthHabitSub AS
               FormDate,
               PointNbr,
               Indicator,
-              HitCategory;-- View: LPI_CanopyLayers_Point_Litter
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_Litter
 CREATE VIEW LPI_CanopyLayers_Point_Litter AS
     SELECT SiteKey,
            PlotKey,
@@ -2649,8 +2694,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Litter AS
               LineID,
               FormDate,
               PointNbr,
-              Tag;-- View: LPI_CanopyLayers_Point_SoilSurface
-
+              Tag;
+			  
+-- View: LPI_CanopyLayers_Point_SoilSurface
 CREATE VIEW LPI_CanopyLayers_Point_SoilSurface AS
     SELECT SiteKey,
            PlotKey,
@@ -2681,8 +2727,9 @@ CREATE VIEW LPI_CanopyLayers_Point_SoilSurface AS
               LineID,
               FormDate,
               PointNbr,
-              Indicator;-- View: LPI_CanopyLayers_Point_SoilSurface_CvrCat
-
+              Indicator;
+			  
+-- View: LPI_CanopyLayers_Point_SoilSurface_CvrCat
 CREATE VIEW LPI_CanopyLayers_Point_SoilSurface_CvrCat AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -2708,8 +2755,9 @@ CREATE VIEW LPI_CanopyLayers_Point_SoilSurface_CvrCat AS
               a.PlotID,
               a.LineID,
               a.FormDate,
-              a.PointNbr;-- View: LPI_CanopyLayers_Point_Species
-
+              a.PointNbr;
+			  
+-- View: LPI_CanopyLayers_Point_Species
 CREATE VIEW LPI_CanopyLayers_Point_Species AS
     SELECT SiteKey,
            PlotKey,
@@ -2836,8 +2884,9 @@ CREATE VIEW LPI_CanopyLayers_Point_Species AS
               FormDate,
               PointNbr,
               Indicator,
-              HitCategory;-- View: LPI_CanopyLayers_Point_SpeciesTags
-
+              HitCategory;
+			  
+-- View: LPI_CanopyLayers_Point_SpeciesTags
 CREATE VIEW LPI_CanopyLayers_Point_SpeciesTags AS
     SELECT SiteKey,
            PlotKey,
@@ -2948,8 +2997,9 @@ CREATE VIEW LPI_CanopyLayers_Point_SpeciesTags AS
               FormDate,
               PointNbr,
               Indicator,
-              HitCategory;-- View: LPI_Line_Count
-
+              HitCategory;
+			  
+-- View: LPI_Line_Count
 CREATE VIEW LPI_Line_Count AS
     SELECT SiteKey,
            PlotKey,
@@ -2982,8 +3032,9 @@ CREATE VIEW LPI_Line_Count AS
               IndicatorCategory,
               Indicator,
               Duration,
-              HitCategory;-- View: LPI_Line_IndicatorsCalc
-
+              HitCategory;
+			  
+-- View: LPI_Line_IndicatorsCalc
 CREATE VIEW LPI_Line_IndicatorsCalc AS
     SELECT a.SiteKey AS SiteKey,
            a.PlotKey AS PlotKey,
@@ -3024,8 +3075,9 @@ CREATE VIEW LPI_Line_IndicatorsCalc AS
               IndicatorCategory,
               Indicator,
               Duration,
-              HitCategory;-- View: LPI_Line_IndicatorsCartesian
-
+              HitCategory;
+			  
+-- View: LPI_Line_IndicatorsCartesian
 CREATE VIEW LPI_Line_IndicatorsCartesian AS
     SELECT a.*,
            b.Tag AS Duration,
@@ -3170,8 +3222,9 @@ CREATE VIEW LPI_Line_IndicatorsCartesian AS
               IndicatorCategory,
               Indicator,
               Duration,
-              HitCategory;-- View: LPI_Line_PointCount
-
+              HitCategory;
+			  
+-- View: LPI_Line_PointCount
 CREATE VIEW LPI_Line_PointCount AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -3191,8 +3244,9 @@ CREATE VIEW LPI_Line_PointCount AS
      GROUP BY a.SiteID,
               a.PlotID,
               a.LineID,
-              b.RecKey;-- View: LPI_Plot_Species
-
+              b.RecKey;
+			  
+-- View: LPI_Plot_Species
 CREATE VIEW LPI_Plot_Species AS
     SELECT SiteKey,
            PlotKey,
@@ -3207,8 +3261,9 @@ CREATE VIEW LPI_Plot_Species AS
               Indicator
      ORDER BY SiteID,
               PlotID,
-              Indicator;-- View: LPI_Point_Indicators
-
+              Indicator;
+			  
+-- View: LPI_Point_Indicators
 CREATE VIEW LPI_Point_Indicators AS
     SELECT *
       FROM LPI_CanopyLayers_Point_Duration_Foliar
@@ -3254,8 +3309,9 @@ CREATE VIEW LPI_Point_Indicators AS
               FormDate,
               PointNbr,
               Indicator,
-              HitCategory;-- View: NonSpeciesIndicators
-
+              HitCategory;
+			  
+-- View: NonSpeciesIndicators
 CREATE VIEW NonSpeciesIndicators AS
     SELECT 'All' AS Duration,
            'Growth Habit' AS IndicatorCategory,
@@ -3322,8 +3378,9 @@ CREATE VIEW NonSpeciesIndicators AS
       FROM Duration_SpeciesTags_Combinations_Use
      ORDER BY IndicatorCategory,
               Indicator,
-              Duration;-- View: PD_ClassLabels
-
+              Duration;
+			  
+-- View: PD_ClassLabels
 CREATE VIEW PD_ClassLabels AS
     SELECT PlotKey,
            1 AS ClassNumber,
@@ -3377,8 +3434,10 @@ CREATE VIEW PD_ClassLabels AS
            9 AS ClassNumber,
            PlantDenClass9 AS Label
       FROM tblPlotFormDefaults
-     WHERE PlotKey != '999999999';-- View: PD_Detail_Long
+     WHERE PlotKey != '999999999';
 
+	 
+-- View: PD_Detail_Long
 CREATE VIEW PD_Detail_Long AS
     SELECT RecKey,
            Quadrat,
@@ -3454,8 +3513,9 @@ CREATE VIEW PD_Detail_Long AS
      ORDER BY RecKey,
               Quadrat,
               SpeciesCode,
-              ClassNumber;-- View: PD_Line
-
+              ClassNumber;
+			  
+-- View: PD_Line
 CREATE VIEW PD_Line AS
     SELECT/* Species Class */ SiteKey,
            PlotKey,
@@ -3754,8 +3814,9 @@ CREATE VIEW PD_Line AS
               FormDate,
               IndicatorCategory,
               Indicator,
-              ClassNumber;-- View: PD_Plot
-
+              ClassNumber;
+			  
+-- View: PD_Plot
 CREATE VIEW PD_Plot AS
     SELECT SiteKey,
            PlotKey,
@@ -3790,8 +3851,9 @@ CREATE VIEW PD_Plot AS
               Season,
               IndicatorCategory,
               Indicator,
-              ClassNumber;-- View: PD_Raw_Final
-
+              ClassNumber;
+			  
+-- View: PD_Raw_Final
 CREATE VIEW PD_Raw_Final AS
     SELECT e.SiteKey,
            d.PlotKey,
@@ -3828,8 +3890,9 @@ CREATE VIEW PD_Raw_Final AS
               Quadrat,
               SubQuadSize_sqm,
               SpeciesCode,
-              a.ClassNumber;-- View: PD_Tag
-
+              a.ClassNumber;
+			  
+-- View: PD_Tag
 CREATE VIEW PD_Tag AS
     SELECT a.Tag,
            b.IndicatorCategory,
@@ -3854,8 +3917,9 @@ CREATE VIEW PD_Tag AS
               b.ClassNumber,
               b.ClassLabel,
               b.Duration,
-              b.Indicator;-- View: Plot_Definition
-
+              b.Indicator;
+			  
+-- View: Plot_Definition
 CREATE VIEW Plot_Definition AS
     SELECT a.SiteKey,
            a.PlotKey,
@@ -3931,8 +3995,9 @@ CREATE VIEW Plot_Definition AS
            tblSites AS b ON a.SiteKey = b.SiteKey
      WHERE b.SiteKey NOT IN ('888888888', '999999999') 
      ORDER BY SiteID,
-              PlotID;-- View: Plot_Notes
-
+              PlotID;
+			  
+-- View: Plot_Notes
 CREATE VIEW Plot_Notes AS
     SELECT c.SiteKey,
            b.PlotKey,
@@ -3950,8 +4015,9 @@ CREATE VIEW Plot_Notes AS
            tblSites AS c ON b.SiteKey = c.SiteKey
      ORDER BY SiteID,
               PlotID,
-              NoteDate;-- View: SitePlot_Join
-
+              NoteDate;
+			  
+-- View: SitePlot_Join
 CREATE VIEW SitePlot_Join AS
     SELECT a.SiteKey,
            a.SiteID,
@@ -3963,8 +4029,9 @@ CREATE VIEW SitePlot_Join AS
            tblPlots AS b ON a.SiteKey = b.SiteKey
      WHERE a.SiteKey NOT IN ('888888888', '999999999') 
      ORDER BY SiteID,
-              PlotID;-- View: SitePlotLine_Join
-
+              PlotID;
+			  
+-- View: SitePlotLine_Join
 CREATE VIEW SitePlotLine_Join AS
     SELECT a.SiteKey,
            a.SiteID,
@@ -3981,8 +4048,9 @@ CREATE VIEW SitePlotLine_Join AS
      WHERE a.SiteKey NOT IN ('888888888', '999999999') 
      ORDER BY SiteID,
               PlotID,
-              LineID;-- View: SoilPit_Raw
-
+              LineID;
+			  
+-- View: SoilPit_Raw
 CREATE VIEW SoilPit_Raw AS
     SELECT d.SiteKey,
            c.PlotKey,
@@ -4063,8 +4131,9 @@ CREATE VIEW SoilPit_Raw AS
            tblSites AS d ON c.SiteKey = d.SiteKey
      ORDER BY SiteID,
               PlotID,
-              HorizonDepthUpper;-- View: SoilStab_Line
-
+              HorizonDepthUpper;
+			  
+-- View: SoilStab_Line
 CREATE VIEW SoilStab_Line AS
     SELECT d.SiteKey,
            c.PlotKey,
@@ -4196,8 +4265,9 @@ CREATE VIEW SoilStab_Line AS
               d.PlotID,
               a.Line,
               c.FormDate,
-              Indicator;-- View: SoilStab_Plot
-
+              Indicator;
+			  
+-- View: SoilStab_Plot
 CREATE VIEW SoilStab_Plot AS
     SELECT d.SiteKey,
            c.PlotKey,
@@ -4319,8 +4389,9 @@ CREATE VIEW SoilStab_Plot AS
      ORDER BY d.SiteID,
               d.PlotID,
               c.FormDate,
-              Indicator;-- View: SoilStab_Raw_Final
-
+              Indicator;
+			  
+-- View: SoilStab_Raw_Final
 CREATE VIEW SoilStab_Raw_Final AS
     SELECT d.SiteID,
            d.SiteName,
@@ -4349,8 +4420,9 @@ CREATE VIEW SoilStab_Raw_Final AS
               FormDate,
               BoxNumber,
               Line,
-              Position;-- View: SoilStab_Tag
-
+              Position;
+			  
+-- View: SoilStab_Tag
 CREATE VIEW SoilStab_Tag AS
     SELECT a.Tag,
            b.IndicatorCategory,
@@ -4370,8 +4442,9 @@ CREATE VIEW SoilStab_Tag AS
      ORDER BY a.Tag,
               b.IndicatorCategory,
               b.Duration,
-              b.Indicator;-- View: SoilStabDetail_Long
-
+              b.Indicator;
+			  
+-- View: SoilStabDetail_Long
 CREATE VIEW SoilStabDetail_Long AS
     SELECT RecKey,
            CAST (BoxNum AS NUMERIC) AS BoxNumber,
@@ -4645,8 +4718,9 @@ CREATE VIEW SoilStabDetail_Long AS
      ORDER BY RecKey,
               BoxNumber,
               Line,
-              Position;-- View: SpeciesList
-
+              Position;
+			  
+-- View: SpeciesList
 CREATE VIEW SpeciesList AS
     SELECT a.SpeciesCode,
            a.ScientificName,
@@ -4661,8 +4735,9 @@ CREATE VIEW SpeciesList AS
            b.GrowthHabitSub
       FROM tblSpecies AS a
            LEFT JOIN
-           tblSpeciesGrowthHabit AS b ON a.GrowthHabitCode = b.Code;-- View: SR_Line
-
+           tblSpeciesGrowthHabit AS b ON a.GrowthHabitCode = b.Code;
+		   
+-- View: SR_Line
 CREATE VIEW SR_Line AS
     SELECT a.*,
            CASE WHEN b.subPlot_n IS NULL THEN 0 ELSE b.subPlot_n END AS subPlot_n,
@@ -4678,8 +4753,9 @@ CREATE VIEW SR_Line AS
               a.FormDate,
               a.IndicatorCategory,
               a.Duration,
-              a.Indicator;-- View: SR_Line_Count
-
+              a.Indicator;
+			  
+-- View: SR_Line_Count
 CREATE VIEW SR_Line_Count AS
     SELECT SiteKey,
            PlotKey,
@@ -4865,8 +4941,9 @@ CREATE VIEW SR_Line_Count AS
               FormDate,
               IndicatorCategory,
               Duration,
-              Indicator;-- View: SR_Line_Mean
-
+              Indicator;
+			  
+-- View: SR_Line_Mean
 CREATE VIEW SR_Line_Mean AS
     SELECT x.*,
            Count(y.subPlotID) AS subPlot_n,
@@ -4921,8 +4998,9 @@ CREATE VIEW SR_Line_Mean AS
               FormDate,
               IndicatorCategory,
               Duration,
-              Indicator;-- View: SR_List_Line
-
+              Indicator;
+			  
+-- View: SR_List_Line
 CREATE VIEW SR_List_Line AS
     SELECT x.SiteKey,
            x.PlotKey,
@@ -4980,8 +5058,9 @@ CREATE VIEW SR_List_Line AS
               x.PlotID,
               x.LineID,
               x.FormDate,
-              x.SpeciesCode;-- View: SR_List_Plot
-
+              x.SpeciesCode;
+			  
+-- View: SR_List_Plot
 CREATE VIEW SR_List_Plot AS
     SELECT x.SiteKey,
            x.PlotKey,
@@ -5038,8 +5117,9 @@ CREATE VIEW SR_List_Plot AS
      ORDER BY x.SiteID,
               x.PlotID,
               x.Season,
-              x.SpeciesCode;-- View: SR_List_Tag
-
+              x.SpeciesCode;
+			  
+-- View: SR_List_Tag
 CREATE VIEW SR_List_Tag AS
     SELECT x.Tag,
            x.SpeciesCode,
@@ -5093,8 +5173,9 @@ CREATE VIEW SR_Plot AS
               a.Season,
               a.IndicatorCategory,
               a.Duration,
-              a.Indicator;-- View: SR_Plot_Count
-
+              a.Indicator;
+			  
+-- View: SR_Plot_Count
 CREATE VIEW SR_Plot_Count AS
     SELECT SiteKey,
            PlotKey,
@@ -5262,8 +5343,9 @@ CREATE VIEW SR_Plot_Count AS
               Season,
               IndicatorCategory,
               Duration,
-              Indicator;-- View: SR_Plot_Mean
-
+              Indicator;
+			  
+-- View: SR_Plot_Mean
 CREATE VIEW SR_Plot_Mean AS
     SELECT x.SiteKey AS SiteKey,
            x.PlotKey AS PlotKey,
@@ -5328,8 +5410,9 @@ CREATE VIEW SR_Plot_Mean AS
               Season,
               IndicatorCategory,
               Duration,
-              Indicator;-- View: SR_Raw_Final
-
+              Indicator;
+			  
+-- View: SR_Raw_Final
 CREATE VIEW SR_Raw_Final AS
     SELECT f.SiteID,
            f.SiteName,
@@ -5364,8 +5447,9 @@ CREATE VIEW SR_Raw_Final AS
               LineID,
               FormDate,
               subPlotID,
-              SpeciesCode;-- View: SR_SubPlot
-
+              SpeciesCode;
+			  
+-- View: SR_SubPlot
 CREATE VIEW SR_SubPlot AS
     SELECT f.SiteKey AS SiteKey,
            e.PlotKey AS PlotKey,
@@ -5761,8 +5845,9 @@ CREATE VIEW SR_SubPlot AS
               FormDate,
               a.SubPlotID,
               IndicatorCategory,
-              Indicator;-- View: SR_Tag
-
+              Indicator;
+			  
+-- View: SR_Tag
 CREATE VIEW SR_Tag AS
     SELECT a.*,
            CASE WHEN b.Plot_n IS NULL THEN 0 ELSE b.Plot_n END AS Plot_n,
@@ -5775,8 +5860,9 @@ CREATE VIEW SR_Tag AS
      ORDER BY a.Tag,
               a.IndicatorCategory,
               a.Duration,
-              a.Indicator;-- View: SR_Tag_Count
-
+              a.Indicator;
+			  
+-- View: SR_Tag_Count
 CREATE VIEW SR_Tag_Count AS
     SELECT Tag,
            'Species' AS IndicatorCategory,
@@ -5895,8 +5981,9 @@ CREATE VIEW SR_Tag_Count AS
      ORDER BY Tag,
               IndicatorCategory,
               Duration,
-              Indicator;-- View: SR_Tag_Mean
-
+              Indicator;
+			  
+-- View: SR_Tag_Mean
 CREATE VIEW SR_Tag_Mean AS
     SELECT x.Tag AS Tag,
            x.IndicatorCategory AS IndicatorCategory,
@@ -5951,8 +6038,9 @@ CREATE VIEW SR_Tag_Mean AS
      ORDER BY x.Tag,
               x.IndicatorCategory,
               x.Duration,
-              x.Indicator;-- View: UnitConversion_Use
-
+              x.Indicator;
+			  
+-- View: UnitConversion_Use
 CREATE VIEW UnitConversion_Use AS
     SELECT *
       FROM UnitConversion
@@ -5962,6 +6050,16 @@ CREATE VIEW UnitConversion_Use AS
                                 WHERE VariableName = 'units'
                            );
 
-COMMIT TRANSACTION ; 
+--Exports_All
+CREATE VIEW Exports_All AS
+SELECT Category, DataType, Scale, ObjectName, ExportName, Null AS Function, Null AS QueryOrder
+  FROM Exports
+ UNION
+SELECT 'QAQC' AS Category, Method AS DataType, 'Raw' AS Scale, QueryName AS ObjectName, ExportID As ExportName, Function, QueryOrder
+  FROM QAQC_Queries
+ WHERE use_check = 1
+ ORDER BY Category, DataType, Scale, Function, QueryOrder;	
+ 
+COMMIT TRANSACTION; 
 
 PRAGMA foreign_keys = on;

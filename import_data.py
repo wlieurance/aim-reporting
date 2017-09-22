@@ -2,7 +2,7 @@ import math
 import sqlalchemy
 import pyodbc
 
-def ImportFromAccess(DIMApath, RDpath, form = None):
+def ImportFromAccess(DIMApath, RDpath, delrecords, form = None):
 
     pyodbc.lowercase = False
     log = ""
@@ -35,13 +35,15 @@ def ImportFromAccess(DIMApath, RDpath, form = None):
         i = row['ImportTable']
         if i == None:
             i = r
-        if form != None:
-            form.lblAction['text'] = "Deleting rows in " + r
-            form.lblAction.update_idletasks()
-        if row['DeleteTable'] == 1:
-            print("Deleting rows in", r, "...")
-            SQL = sqlalchemy.text("DELETE FROM " + r)
-            connection.execute(SQL)
+        if delrecords:
+            if form != None:
+                form.lblAction['text'] = "Deleting rows in " + r
+                form.lblAction.update_idletasks()
+            if row['DeleteTable'] == 1:
+                print("Deleting rows in", r, "...")
+                SQL = sqlalchemy.text("DELETE FROM " + r)
+                connection.execute(SQL)
+        
         table = sqlalchemy.Table(i, meta, autoload=True, autoload_with=engine)
 
         ### determine which fields to import and then construct relevant SQL
@@ -83,7 +85,7 @@ def ImportFromAccess(DIMApath, RDpath, form = None):
                         for i in range(fieldnum):
                             dic[dcur.description[i][0]] = row[i]
                         dicmat.append(dic)
-                    insert = table.insert().values(dicmat)
+                    insert = table.insert().values(dicmat).prefix_with("OR IGNORE")
                     connection.execute(insert)
                 if form != None:
                     form.pBar.step()

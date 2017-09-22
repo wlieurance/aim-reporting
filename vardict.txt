@@ -1,1 +1,0 @@
-{"RDpath": "U:\\Tools\\Reporting Database\\dev\\test.sqlite", "DIMApath": "U:\\Tools\\Reporting Database\\dev\\test_data\\NVAIM CCDO_DIMA 5.2_20170906.mdb"}
