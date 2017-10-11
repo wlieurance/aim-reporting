@@ -1,7 +1,10 @@
-numpy
-xlsxwriter
-sqlalchemy
-pyodbc
+numpy>=1.13.0
+openpyxl>=2.4.8
+sqlalchemy>=1.1.14
+pyodbc>=4.0.17
+geomag>=0.9
+sqlparse>=0.2.4
+
 #tkinter --may need to install manually if not pre-installed
 
 ##comes with python 3.x
