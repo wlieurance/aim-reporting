@@ -11,16 +11,16 @@ from tkinter import ttk
 from tkinter import filedialog, messagebox
 
 from import_data import ImportFromAccess
-from update import Update
+from update import Update, run_sqlscript
 from export_data import ExportForm, Export
 from classes import stdevs, meanw, stdevw
 
-
+###begin class definition###
 class MainForm:
     def __init__(self, master):
         frame = tkinter.Frame(master)
         frame.grid()
-        master.title("Reporting Database v2.0")
+        master.title("AIM Reporting Database v2.0a")
         self.style = ttk.Style()
         self.style.configure("TButton", padding=6, relief="flat", background="#ccc", width=20)
 
@@ -75,55 +75,76 @@ class MainForm:
 
     def create_RD(self):
         path = tkinter.filedialog.asksaveasfilename(title = "Choose Reporting Database to use:", filetypes = (("sqlite files", "*.sqlite"),))
-        if os.path.isfile(path):
-            os.remove(path)
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except PermissionError:
+            tkinter.messagebox.showerror("Error", "Chosen file is in use by another process or user does not have permission to overwrite file.")
+            path = None
         if path:
-            ans = tkinter.messagebox.askyesno('Custom SQL Path?','Would you like to choose a custom SQL path for database creation/configuration?')
-            if ans:
-                sqldir = tkinter.filedialog.askdirectory(title = "Choose custom SQL directory to use (default is ./sql/):")
+            if os.path.basename(path).find('.') == -1:
+                path = '.'.join((path, 'sqlite'))
+            if not os.path.isdir(var['SQLpath']):
+                tkinter.messagebox.showwarning('SQL path not found.','Default SQL script directory (/path/to/main.py/sql) not found. Please choose custom SQL script directory.')
+                sqldir = tkinter.filedialog.askdirectory(title = "Choose custom SQL directory to use.")
+                if not sqldir:
+                    tkinter.messagebox.showerror("Error", "Need a valid SQL script directory to continue.")
+                    msg = 'Database creation aborted.'
+                    self.lblAction['text'] = msg
+                    self.lblAction.update_idletasks()
+                    print(msg)
+                    return
             else:
                 sqldir = var['SQLpath']
-            print("Creating Database")
+
+            print("Creating database...")
+            self.lblAction['text'] = 'Creating database...'
+            self.lblAction.update_idletasks()
+
             conn = sqlite.connect(path)
+            conn.enable_load_extension(True)
             c = conn.cursor()
-
+            c.execute("SELECT load_extension('mod_spatialite')")
+            ###checks if db has been initialized to spatialite and intitializes if not.
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='geometry_columns';")
+            data = c.fetchone()
+            if data is None:
+                self.lblAction['text'] = 'Initializing spatialite...'
+                self.lblAction.update_idletasks()
+                print('Initializing spatialite...')
+                
+                c.execute("SELECT InitSpatialMetaData(1)")
+            
             #the following blocks open sql statements from the 'sql' directory and execute them in the newly created file
-            with open(os.path.join(sqldir, 'create_tables.sql')) as f:
-                create_tables = f.read()
-            msg = 'Creating tables...'
-            self.lblAction['text'] = msg
-            print(msg)
-            c.executescript(create_tables)
-
-            with open(os.path.join(sqldir, 'insert_config.sql')) as f:
-                insert_config = f.read()
-            msg =  'Inserting configuration data...'
-            self.lblAction['text'] = msg
-            print(msg)
-            c.executescript(insert_config)
-
-            with open(os.path.join(sqldir, 'create_views.sql')) as f:
-                create_views = f.read()
-            msg = 'Creating views...'
-            self.lblAction['text'] = msg
-            print(msg)
-            c.executescript(create_views)
-
-            with open(os.path.join(sqldir, 'create_qaqc.sql')) as f:
-                create_qaqc = f.read()
-            msg = 'Creating QAQC views and inserting QAQC config data...'
-            self.lblAction['text'] = msg
-            print(msg)
-            c.executescript(create_qaqc)
-
-            msg = 'Database created successfully.'
-            self.lblAction['text'] = msg
-            print(msg)
-
-            var['RDpath'] = os.path.abspath(path)
-            self.lblRDpath['text'] = "Current database: " + var['RDpath']
-            with open('vardict.json', 'w') as out_file:
-                json.dump(var, out_file)
+            script_list = [[os.path.join(sqldir, 'create_tables.sql'), 'Creating tables...'],
+                           [os.path.join(sqldir, 'insert_config.sql'), 'Inserting configuration data...'],
+                           [os.path.join(sqldir, 'create_views.sql'), 'Creating views...'],
+                           [os.path.join(sqldir, 'create_qaqc.sql'), 'Creating QAQC views and inserting QAQC config data...']]
+            success = True
+            finished = False
+            while success and not finished:
+                for scr in script_list:
+                    success, errors = run_sqlscript(conn, script_path = scr[0], form = self, msg = scr[1])
+                    if not success:
+                        break
+                finished = True
+                    
+            
+            if success:
+                msg = 'Database created successfully.'
+                self.lblAction['text'] = msg
+                self.lblAction.update_idletasks()
+                print(msg)
+                var['RDpath'] = os.path.abspath(path)
+                self.lblRDpath['text'] = "Current database: " + var['RDpath']
+                with open('vardict.json', 'w') as out_file:
+                    json.dump(var, out_file)
+            else:
+                msg = 'Error in creating database.'
+                self.lblAction['text'] = msg
+                self.lblAction.update_idletasks()
+                print(msg)
+                print(errors)
 
     def choose_DIMA(self):
         if var['RDpath'] != None:
@@ -136,20 +157,30 @@ class MainForm:
                     self.pBar.grid()
                     self.pBar2.grid()
                     self.lblProgress['text'] = "Total Progress:"
-                    delrecords = tkinter.messagebox.askyesno("Delete?", "Would you like to delete current data before import?")
+
+                    conn = sqlite.connect(var['RDpath'])
+                    c = conn.cursor()
+                    rows = c.execute("SELECT Value FROM Data_DBconfig WHERE VariableName = 'empty';")
+                    r = rows.fetchone()
+                    if r[0] == '0':
+                        delrecords = tkinter.messagebox.askyesno("Delete?", "Would you like to delete current data before import?")
+                    else:
+                        delrecords = False
                     log = ImportFromAccess(var['DIMApath'], var['RDpath'], delrecords, self)
-                    Update(var['RDpath'], self)
+                    var1 = Update(var, self)
                     root.config(cursor="")
                     self.lblAction['text'] = ""
                     self.lblProgress['text'] = ""
                     self.pBar2.grid_remove()
                     self.pBar.grid_remove()
+                    var['WMMpath'] = var1['WMMpath']
                     if not log:
                         tkinter.messagebox.showinfo("Import complete.", "Data successfully transferred from DIMA.")
                     else:
                         tkinter.messagebox.showinfo("Import incomplete.", log)
                     with open('vardict.json', 'w') as out_file:
                         json.dump(var, out_file)
+                    
             else:
                 tkinter.messagebox.showerror("Error", "Current database path does not exist. Please connect to valid database.")
         else:
@@ -165,23 +196,23 @@ class MainForm:
             tkinter.messagebox.showerror("Error", "Database path not chosen. Please connect to valid database or create a new one first.")
 
     def SQLscript(self):
-        if var['RDpath'] != None:
-            if os.path.isfile(var['RDpath']):
-                script_path = tkinter.filedialog.askopenfilename(title = "Choose SQL script to run on Database.", filetypes = (("SQL files", "*.sql"),("All files", "*.*")))
+        if RDpath != None:
+            if os.path.isfile(RDpath):
                 conn = sqlite.connect(var['RDpath'])
-                c = conn.cursor()
-                with open(script_path) as f:
-                        script = f.read()
-                c.executescript(script)
+                run_sqlscript(conn, None)
                 tkinter.messagebox.showinfo("Done.", "SQL script run.")
+                conn.close()
             else:
                 tkinter.messagebox.showerror("Error", "Current database path does not exist. Please connect to valid database.")
         else:
             tkinter.messagebox.showerror("Error", "Database path not chosen. Please connect to valid database or create a new one first.")
+            
+###end class definition###
 
+###begin main execution block###            
 scriptdir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.isfile('vardict.json'):
-    var = {'RDpath':None, 'DIMApath':None, 'SQLpath':os.path.join(scriptdir, 'sql')}
+    var = {'RDpath':None, 'DIMApath':None, 'SQLpath':os.path.join(scriptdir, 'sql'), 'WMMpath':None}
     with open(os.path.join(scriptdir, 'vardict.json'), 'w') as out_file:
         json.dump(var, out_file)
 else:
@@ -192,6 +223,7 @@ mf = MainForm(root)
 root.mainloop()
 with open('vardict.json', 'w') as out_file:
     json.dump(var, out_file)
+###end main execution block###   
 
 
 
