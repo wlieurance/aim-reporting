@@ -1,5 +1,5 @@
 import os
-import sqlalchemy
+import sqlite3 as sqlite
 import openpyxl
 
 import tkinter
@@ -13,7 +13,7 @@ class ExportForm:
     def __init__(self, parent, child, RDpath, connection):
         cframe = tkinter.Frame(child)
         cframe.grid()
-
+        child.title("AIMRD Export")
         self.valueCat = []
         self.valueData = []
         self.valueScale = []
@@ -59,12 +59,10 @@ class ExportForm:
                 value.append(w.get(c[i]))
             #print(value)
             self.valueCat = value
-            where1 = "'"
-            for i in value:
-                where1 = where1 + "'" + i + "', "
-            where1 = where1[1:len(where1)-2]
-            s = "SELECT DataType FROM Exports_All WHERE Category IN (" + where1 + ") GROUP BY DataType ORDER BY DataType;"
-            result = connection.execute(s)
+            sql = "SELECT DataType FROM Exports_All WHERE Category IN ({!s}) GROUP BY DataType ORDER BY DataType;"
+            sql = sql.format(','.join('?'*len(self.valueCat)))
+            #print(sql)
+            result = connection.execute(sql, self.valueCat)
             for row in result:
                 self.lstDataType.insert(tkinter.END, row['DataType'])
 
@@ -86,8 +84,10 @@ class ExportForm:
             for i in self.valueCat:
                 where2 = where2 + "'" + i + "', "
             where2 = where2[1:len(where2)-2]
-            s = "SELECT Scale FROM Exports_All WHERE DataType IN ("+ where1 + ") AND Category IN (" + where2 + ") GROUP BY Scale ORDER BY Scale;"
-            result = connection.execute(s)
+            sql = "SELECT Scale FROM Exports_All WHERE DataType IN ({!s}) AND Category IN ({!s}) GROUP BY Scale ORDER BY Scale;"
+            sql = sql.format(','.join('?'*len(self.valueData)), ",".join('?'*len(self.valueCat)))
+            #print(sql)
+            result = connection.execute(sql, self.valueData + self.valueCat)
             for row in result:
                 #print(row)
                 self.lstScale.insert(tkinter.END, row['Scale'])
@@ -142,32 +142,20 @@ class ExportForm:
         self.lstScale.delete(0, tkinter.END)
         self.lstCategory.selection_clear(0, tkinter.END)
 
-    def exportselection(self):
-        where1 = "'"
-        for i in self.valueCat:
-            where1 = where1 + "'" + i + "', "
-        where1 = where1[1:len(where1) - 2]
-
-        where2 = "'"
-        for i in self.valueData:
-            where2 = where2 + "'" + i + "', "
-        where2 = where2[1:len(where2) - 2]
-
-        where3 = "'"
-        for i in self.valueScale:
-            where3 = where3 + "'" + i + "', "
-        where3 = where3[1:len(where3) - 2]
-        #print(where1, " - ", where2, " - ", where3)
-        
-        #I know this sort of construction is subject to SQL injection attacks, but constructing it properly through sqlalchemy is super annoying.
-        s = "SELECT ObjectName, ExportName FROM Exports_All WHERE Category IN (" + where1 + ") AND DataType IN (" + where2 + ") AND Scale IN (" + where3 + ") ORDER BY Category, Scale, DataType, ExportName;"
-        result = self.connection.execute(s)
+    def exportselection(self):        
+        self.connection.enable_load_extension(True)
+        self.connection.execute("SELECT load_extension('mod_spatialite')")
+        sql = """SELECT ObjectName, ExportName
+                   FROM Exports_All
+                  WHERE Category IN ({!s}) AND DataType IN ({!s}) AND Scale IN ({!s}) 
+                  ORDER BY Category, Scale, DataType, ExportName;"""
+        sql = sql.format(','.join('?'*len(self.valueCat)), ','.join('?'*len(self.valueData)), ','.join('?'*len(self.valueScale)))
+        result = self.connection.execute(sql, self.valueCat + self.valueData + self.valueScale)
         path = tkinter.filedialog.asksaveasfilename(defaultextension = ".xlsx", title="Choose filename for export:", filetypes=(("Excel files", "*.xlsx"),("All files", "*.*")))
         if os.path.isfile(path):
             os.remove(path)
         if path:
             try:
-                #workbook = xlsxwriter.Workbook(path)
                 workbook = openpyxl.Workbook()
                 exportEmpty = True # this checks to see if the user wants to export empty views/tables
                 asked = False # this keeps track of whether the user was asked to export blanks or not
@@ -180,21 +168,24 @@ class ExportForm:
                     self.lblExport.update_idletasks()
                     self.lblExport['text'] = "Exporting " + row["ExportName"] + "..."
                     self.lblExport.update_idletasks()
-                    result2 = self.connection.execute("SELECT * FROM " + row["ObjectName"])
-                    emptytest = result2.fetchone()
-                    result2 = self.connection.execute("SELECT * FROM " + row["ObjectName"]) #resents record set after fetchone(). Attempted SELECT Count(*) but kept getting MemoryErrors 
-                    if emptytest is None:
+                    #self.connection.execute("DROP TABLE IF EXISTS OutTable;")
+                    #self.connection.execute("CREATE TEMPORARY TABLE OutTable AS SELECT * FROM {!s};".format(row["ObjectName"]))
+                    #obj = 'OutTable'
+                    obj = row["ObjectName"]
+                    rowcount = self.connection.execute("SELECT Count(*) FROM {!s};".format(obj)).fetchone()[0]
+                    result2 = self.connection.execute("SELECT * FROM {!s};".format(obj))
+                    if rowcount == 0:
                         if not asked:
                             exportEmpty = tkinter.messagebox.askyesno("Export Blanks", "Export blank results?")
                             asked = True
-                    if emptytest is not None or (emptytest is None and exportEmpty):          
+                    if rowcount > 0 or (rowcount == 0 and exportEmpty):          
                         print("Exporting",row["ExportName"],"...")
                         if os.path.isfile(path):
                             worksheet = workbook.create_sheet(title=row["ExportName"])
                         else:
                             worksheet = workbook.active
                             worksheet.title = row["ExportName"]
-                        colnames = result2.keys()
+                        colnames = [desc[0] for desc in result2.description]
                         worksheet.append(colnames)
                         for row2 in result2:
                             d = dict(row2)
@@ -216,24 +207,18 @@ class ExportForm:
             except PermissionError:
                 tkinter.messagebox.showinfo("Error", "Could not access" + os.linesep + path + os.linesep +"File may be in use.")
 
-
 def Export(RDpath, form = None):
-    RDconstring = "sqlite:///" + RDpath
     dirpath = os.path.dirname(RDpath)
     dbname = os.path.basename(RDpath)
-    
-    engine = sqlalchemy.create_engine(RDconstring)
-    connection = engine.connect()
-    dbapi_connection = connection.connection
-    dbapi_connection.create_aggregate("stdev", 1, stdevs)
-    dbapi_connection.create_aggregate("meanw", 2, meanw)
-    dbapi_connection.create_aggregate("stdevw", 2, stdevw)
-    meta = sqlalchemy.MetaData()
-
+    conn = sqlite.connect(RDpath)
+    conn.row_factory = sqlite.Row
+    conn.create_aggregate("stdev", 1, stdevs)
+    conn.create_aggregate("meanw", 2, meanw)
+    conn.create_aggregate("stdevw", 2, stdevw)
     child = tkinter.Tk()
-    cf = ExportForm(form, child, RDpath, connection)
+    cf = ExportForm(form, child, RDpath, conn)
     child.mainloop()
-    connection.close()
+    conn.close()
     return;
 
 
