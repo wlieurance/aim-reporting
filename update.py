@@ -1,52 +1,116 @@
 import os
 import datetime
 import calendar
-import sqlalchemy
+import sqlite3 as sqlite
+import geomag
+import tkinter
+#separate imports needed due to tkinter idiosyncrasies
+from tkinter import ttk
+from tkinter import filedialog, messagebox
+import sqlparse
+
 from classes import stdevs, meanw, stdevw
 
-def Update(RDpath, form = None):
+
+### begin function defintion ###
+def run_sqlscript(conn, script_path, form = None, msg = None):
+    if script_path == None:
+        script_path = tkinter.filedialog.askopenfilename(title = "Choose SQL script to run on Database.", filetypes = (("SQL files", "*.sql"),("All files", "*.*")))
+    with open(script_path) as f:
+            script = f.read()
+    stmts = sqlparse.split(script)
+    curlength = 1  #initial values get the while loop to run at least once.
+    pastlength = 2 #initial values get the while loop to run at least once.
+    counter = 0
+    while curlength < pastlength and curlength > 0:
+        errors = []
+        counter += 1
+        #print("Script pass",str(counter))
+        pastlength = len(stmts)
+        for stmt in stmts:
+            try:
+                conn.execute(stmt)
+                stmts = [x for x in stmts if x != stmt] #removes SQL statement from list if completed successfully]
+            except sqlite.OperationalError:
+                errors.append(stmt)
+        curlength = len(stmts)   
+
+    if msg != None:
+        print(msg)
+        if form != None:
+            form.lblAction['text'] = msg
+            form.lblAction.update_idletasks()
+    if len(stmts) == 0:
+        return (True, None)
+    else:
+        return (False, stmts)
+        
+def Update(var, form = None):
+    RDpath = var['RDpath']
     log = ""
-    sqldir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql")
+    sqldir = var['SQLpath']
     
     ### connect to SQLite3 DB
-    RDconstring = "sqlite:///" + RDpath
     dirpath = os.path.dirname(RDpath)
     dbname = os.path.basename(RDpath)
-    engine = sqlalchemy.create_engine(RDconstring)
-    connection = engine.connect()
-    dbapi_connection = connection.connection #connects to the raw sqlite3 db api
-    dbapi_connection.create_aggregate("stdev", 1, stdevs)
-    dbapi_connection.create_aggregate("meanw", 2, meanw)
-    dbapi_connection.create_aggregate("stdevw", 2, stdevw)
-    c = dbapi_connection.cursor()
-    meta = sqlalchemy.MetaData()
+    connection = sqlite.connect(RDpath)
 
-    speciesrichness(dbapi_connection)
-    SeasonsCalc(connection, engine, meta)
-    with open(os.path.join(sqldir, 'update.sql')) as f:
-        update = f.read()
-        msg = "Running update script..."
-        if form != None:
-            form.lblAction['text'] = msg
-            form.lblAction.update_idletasks()
-        print(msg)
-        c.executescript(update)
-    with open(os.path.join(sqldir, 'insert_tags.sql')) as f:
-        tags = f.read()
-        msg = "Inserting plot/species tags into database..."
-        if form != None:
-            form.lblAction['text'] = msg
-            form.lblAction.update_idletasks()
-        print(msg)
-        c.executescript(tags) #must access raw dbapi for this one
-    connection.execute("VACUUM")
+    ### creating these functions allows for custom aggreate functions within the database. See classes.py for definition.
+    connection.create_aggregate("stdev", 1, stdevs)
+    connection.create_aggregate("meanw", 2, meanw)
+    connection.create_aggregate("stdevw", 2, stdevw)
+    connection.enable_load_extension(True)
+    connection.row_factory = sqlite.Row
+    c = connection.cursor()
+
+    ### converts DIMA species list semi-colon concatenated values to individual species records for ease of processing.
+    speciesrichness(connection)
+    ### defines how to group plots together when looking at plot level info. Only one plot with the same plotkey is shown per season.
+    SeasonsCalc(connection)
+    ### runs update SQL script to perform various post import updates given in the script.
+    run_sqlscript(connection, script_path = os.path.join(sqldir, 'update.sql'), form = form, msg = 'Running update script...')
+    ### runs insert_tags SQL script to automatically create some species and plot tags given in the SQL script (e.g. sagebrush = woody Artemisia sp.)
+    run_sqlscript(connection, script_path = os.path.join(sqldir, 'insert_tags.sql'), form = form, msg = r'Inserting plot/species tags into database...')
+    
+    ### add declination information to tblPlots
+    if var['WMMpath'] == None:
+        getwmm = True
+    elif not os.path.isfile(var['WMMpath']):
+        getwmm = True
+    else:
+        getwmm = False
+        mmpath = var['WMMpath']
+    if getwmm:
+        getmm = tkinter.messagebox.askyesno("Calculate declination?", "Would you like to calulate the magnetic declination of imported plots (is required for some spatial QC checks)?")
+        if getmm:
+            mmpath = tkinter.filedialog.askopenfilename(title = "Choose NOAA World Magnetic Model location (i.e. WMM.COF).", 
+                                                            filetypes = (("Magnetic Model files", "*.COF"),("All files", "*.*")))
+            var['WMMpath'] = mmpath
+    if mmpath:
+        gm = geomag.geomag.GeoMag(mmpath)
+        i = connection.cursor()
+        rows = connection.execute("SELECT PlotKey, Latitude, Longitude, Elevation, ElevationType, EstablishDate, "
+                         "Declination FROM tblPlots WHERE PlotKey NOT IN ('888888888','999999999') AND Declination IS NULL;")
+        for row in rows:
+            dt = datetime.datetime.strptime(row['EstablishDate'],'%Y-%m-%d %H:%M:%S')
+            if row['ElevationType'] == 1:
+                elev = row['Elevation']*3.28084
+            elif row['ElevationType'] == 2:
+                elev = row['Elevation']
+            else:
+                elev = 0
+            mag = gm.GeoMag(row['Latitude'],row['Longitude'], elev, dt.date())
+            i.execute("UPDATE tblPlots SET Declination = ? WHERE PlotKey = ?;",(mag.dec, row['PlotKey']),)
+        connection.commit()
+
+    #connection.execute("VACUUM")
     connection.close()
-    return log
+    return var
 
-def SeasonsCalc(connection, engine, meta):
+def SeasonsCalc(connection):
     connection.execute("DELETE FROM SeasonDefinition")
 
-    #checks if a data date range is provided and if not inserts a default range based on date values from tblPlots 
+    ### checks if a data date range is provided and if not inserts a default range based on date values from tblPlots 
     rcount = connection.execute("SELECT Count(*) FROM Data_DateRange").fetchone()[0]
     if rcount == 0:
         sql = """INSERT INTO Data_DateRange SELECT strftime('%Y', Min(EstablishDate)) || 
@@ -60,7 +124,6 @@ def SeasonsCalc(connection, engine, meta):
     enddate = datetime.datetime.strptime(row['EndDate'],'%Y-%m-%d')
     slength = row['SeasonLength_Months']
     slength_years = slength / 12
-    table = sqlalchemy.Table('SeasonDefinition', meta, autoload=True, autoload_with=engine)
     date = startdate
     while date < enddate:
         if calendar.isleap(date.year):
@@ -70,14 +133,14 @@ def SeasonsCalc(connection, engine, meta):
         nextdate = date + datetime.timedelta(days = (slength_years * days))
         send = nextdate - datetime.timedelta(microseconds = 1)
         season = date.strftime('%Y%m%d') + "-" + send.strftime('%Y%m%d')
-        dic = {'SeasonStart': date, 'SeasonEnd': send, 'SeasonLabel': season}
-        insert = table.insert().values(dic)
-        connection.execute(insert)
+        sql = "INSERT INTO SeasonDefinition (SeasonStart, SeasonEnd, SeasonLabel) VALUES (?,?,?);"
+        connection.execute(sql,(date, send, season,))
         date = nextdate   
     return
     
 def speciesrichness(connection):
-    result = connection.execute("SELECT RecKey, subPlotID, SpeciesList FROM tblSpecRichDetail")
+    connection.execute("DELETE FROM SR_Raw;")
+    result = connection.execute("SELECT RecKey, subPlotID, SpeciesList FROM tblSpecRichDetail;")
     for row in result:
         speclist = []
         species = row[2].split(sep=';')
@@ -87,6 +150,7 @@ def speciesrichness(connection):
         #print(speclist)
         connection.executemany('INSERT OR IGNORE INTO SR_Raw VALUES (?,?,?)', speclist)
     connection.commit()
+### end function definition ###
 
 
 
