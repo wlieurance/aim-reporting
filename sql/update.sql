@@ -1,6 +1,7 @@
 -- Text encoding used: System
 --
 PRAGMA foreign_keys = off;
+SELECT load_extension('mod_spatialite');
 BEGIN TRANSACTION;
 
 --Update tblSpecies to define CodeType as genus
@@ -67,7 +68,18 @@ UPDATE tblSpecies
  WHERE CodeType IS NULL AND 
        SpeciesCode IN ('AAGG', 'AAFF', 'PPGG', 'PPFF', 'PPSH', 'PPTR', 'PPSU');
 
-
-
+--Update geometery columns with geometry
+UPDATE OR IGNORE tblPlots
+   SET geometry = MakePointZ(Longitude, Latitude, Elevation, 4326) 
+ WHERE Latitude != 0 AND 
+       Longitude != 0;
+	   
+UPDATE OR IGNORE tblLines
+   SET geometry = MakeLine(MakePointZ(LongitudeStart, LatitudeStart, ElevationStart, 4326), MakePointZ(LongitudeEnd, LatitudeEnd, ElevationEnd, 4326) ) 
+ WHERE LongitudeStart != 0 AND 
+       LatitudeStart != 0 AND 
+       LongitudeEND != 0 AND 
+       LatitudeEND != 0;
+ 
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;

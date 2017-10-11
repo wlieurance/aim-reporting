@@ -110,8 +110,9 @@ INSERT INTO CodeTags (Code, Tag, Category, Use) VALUES
 
 
 -- Table: Data_DBconfig
-INSERT INTO Data_DBconfig (VariableName, Value, PossibleValues) 
-VALUES ('units', 'metric', 'metric, US customary');
+INSERT INTO Data_DBconfig (VariableName, Value, PossibleValues) VALUES 
+('units', 'metric', 'metric, US customary'),
+('empty', 1, '0, 1');
 
 -- Table: Duration_GrowthHabit_Combinations
 INSERT INTO Duration_GrowthHabit_Combinations (GrowthHabit, DurationTag, Use, Category) VALUES 

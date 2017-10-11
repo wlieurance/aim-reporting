@@ -6058,6 +6058,51 @@ CREATE VIEW QAQC_SR_SpecRichAreaIncorrect AS
               c.LineID,
               d.FormDate,
               d.SubPlot;
+
+--QAQC_Lines_AzimuthDifRecorded
+INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
+VALUES(2.0,'QAQC_Lines_AzimuthDifRecorded','Line Definition','Data Criterion Failure','Calulated azimuth (from start and end points) does not match recorded azimuth value.',NULL,'Lines_AzimuthDifRecorded','Azimuth','|Azimuth calculated - actual| <= 5 degrees');			  
+
+CREATE VIEW QAQC_Lines_AzimuthDifRecorded AS
+SELECT ErrorKey,
+       PlotID,
+       LineID,
+       AzimuthType,
+       Declination,
+       AzimuthActual,
+       AzimuthRec,
+       AzimuthRecTrue,
+       Round(CASE WHEN Abs(AzimuthRecTrue - AzimuthActual) < Abs(AzimuthRecTrue + 360 - AzimuthActual) THEN Abs(AzimuthRecTrue - AzimuthActual) ELSE Abs(AzimuthRecTrue + 360 - AzimuthActual) END, 1) AS AzimuthDif
+  FROM (
+           SELECT LineKey AS ErrorKey,
+                  PlotID,
+                  LineID,
+                  CASE WHEN NorthType = 1 THEN 'Magnetic' WHEN NorthType = 2 THEN 'Geodetic' ELSE NULL END AS AzimuthType,
+                  Round(Declination, 1) AS Declination,
+                  Round(Azimuth(LineStart, LineEnd) * 57.295779513, 1) AS AzimuthActual,
+                  Azimuth AS AzimuthRec,
+                  CASE WHEN NorthType = 1 THEN Round(Azimuth + Declination, 1) WHEN NorthType = 2 THEN Azimuth ELSE NULL END AS AzimuthRecTrue
+             FROM (
+                      SELECT a.Declination,
+                             a.PlotID,
+                             b.LineKey,
+                             b.LineID,
+                             b.NorthType,
+                             b.Azimuth,
+                             PointN(b.geometry, 1) AS LineStart,
+                             PointN(b.geometry, NumPoints(b.geometry) ) AS LineEnd
+                        FROM tblPlots AS a
+                             INNER JOIN
+                             tblLines AS b ON a.PlotKey = b.Plotkey
+                       WHERE a.PlotKey NOT IN ('888888888', '999999999') AND 
+                             (b.NorthType = 2 OR 
+                              (b.NorthType = 1 AND 
+                               a.Declination IS NOT NULL) ) 
+                  )
+       )
+ WHERE AzimuthDif > 5
+ ORDER BY PlotID, LineID;
+
 			  
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;
