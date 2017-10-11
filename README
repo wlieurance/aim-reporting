@@ -36,5 +36,4 @@ Currently there are a number of tables in the database that may need to be popul
 Examples of adding data via an sql script can be found in the /sql folder in the 'example_data.sql' file.
 
 --KNOWN ISSUES--
-1)	The loading of entire SQL scripts can be burdensome if there are any errors anywhere (the whole script will fail).  Future implementations may attempt to split the scripts into individual SQL statements for processing via some sort of comment tag(s) or attempt some other methodology.
-2)	Occasional MemoryError exceptions may be raised in python due to the large amount of data and the complexity of the views. Python 64 bit is recommended for this reason.  If this continues to be an issue, methods will have to be developed to mitigate the issue.
+1)	Occasional MemoryError exceptions may be raised in python due to the large amount of data and the complexity of the views. Python 64 bit is recommended for this reason.  If this continues to be an issue, methods will have to be developed to mitigate the issue.
