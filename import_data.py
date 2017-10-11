@@ -1,5 +1,5 @@
 import math
-import sqlalchemy
+import sqlite3 as sqlite
 import pyodbc
 
 def ImportFromAccess(DIMApath, RDpath, delrecords, form = None):
@@ -13,18 +13,24 @@ def ImportFromAccess(DIMApath, RDpath, delrecords, form = None):
     dcur = DIMA.cursor()
 
     ### connect to SQLite3 DB
-    RDconstring = "sqlite:///" + RDpath
-    engine = sqlalchemy.create_engine(RDconstring)
-    connection = engine.connect()
-    meta = sqlalchemy.MetaData()
+    connection = sqlite.connect(RDpath)
+    connection.row_factory = sqlite.Row
+    connection.enable_load_extension(True)
+    connection.execute("SELECT load_extension('mod_spatialite')")
 
+    r = connection.execute("SELECT Value FROM Data_DBconfig WHERE VariableName = 'empty';").fetchone()
+    if r[0] == '1':
+        dbempty = True
+    else:
+        dbempty = False
+        
     ### get the names of tables to transfer between databases
     result = connection.execute("SELECT TableName, ImportTable, FieldString, DeleteTable FROM TablesToImport ORDER BY TableName").fetchall()
     
     totalrows = 0
     for row in result:
         r = row['TableName']
-        totalrows = totalrows + dcur.execute("SELECT Count(*) FROM " + r).fetchone()[0]
+        totalrows = totalrows + dcur.execute("SELECT Count(*) FROM {!s};".format(r)).fetchone()[0]
     print("Total rows =", totalrows)
     if form != None:
         form.pBar2['maximum'] = totalrows
@@ -41,65 +47,64 @@ def ImportFromAccess(DIMApath, RDpath, delrecords, form = None):
                 form.lblAction.update_idletasks()
             if row['DeleteTable'] == 1:
                 print("Deleting rows in", r, "...")
-                SQL = sqlalchemy.text("DELETE FROM " + r)
-                connection.execute(SQL)
+                sql = "DELETE FROM {!s};".format(r)
+                connection.execute(sql)
         
-        table = sqlalchemy.Table(i, meta, autoload=True, autoload_with=engine)
-
         ### determine which fields to import and then construct relevant SQL
         fieldstring = ""
-        cursor = connection.execute('SELECT * FROM ' + i)
-        fields = [description[0] for description in cursor._cursor_description()]
-        cursor2 = dcur.execute('SELECT * FROM ' + r)
+        cursor = connection.execute("SELECT * FROM {!s};".format(i))
+        fields = [description[0] for description in cursor.description]
+        cursor2 = dcur.execute("SELECT * FROM {!s};".format(r))
         fields2 = [description[0] for description in cursor2.description]
-        fieldsmatch = set(fields).intersection(fields2)
+        fieldsmatch = set(fields).intersection(fields2) # this restricts to only matching fields.
+        fieldsmatch = ['[' + s + ']' for s in fieldsmatch] # in case we have stupidly named fields
+        fieldstring = ', '.join(fieldsmatch)
 
-        for item in fieldsmatch:
-            fieldstring = fieldstring + item + ", "
-        fieldstring = fieldstring[0:len(fieldstring)-2]
+        ###necessary to add fields/values not already present in source database
         if row['FieldString'] != None:
-            fieldstring = fieldstring + ', ' + row['FieldString']
+            additions = row['FieldString'].split(',')
+            fields_add = [s.strip().split('AS') for s in additions]
+            fs = []
+            vs = []
+            for f in fields_add:
+                fs.append(f[1].strip())
+                vs.append(f[0].strip().replace("'",""))
+            fs_insert = ', '.join(((fieldstring, ', '.join(fs))))
+        else:
+            fs_insert = fieldstring
+            vs = []
+        
 
         ### determine number of rows in table to import
-        dcur.execute("SELECT Count(*) FROM " + r)
+        dcur.execute("SELECT Count(*) FROM {!s};".format(r))
         rownum = dcur.fetchone()[0]
 
-        dcur.execute("SELECT " + fieldstring + " FROM " + r)
+        dcur.execute("SELECT {!s} FROM {!s};".format(fieldstring, r))
         fieldnum = len(dcur.description)
-        maxrows = math.floor(999/fieldnum) #max sqlite3 entities = 999 so fields x rownumber <= 999
-        rowiter = math.ceil(rownum/maxrows) #determine number of loop iterations
         if form != None:
-            form.lblAction['text'] = "Transfering data to " + r
+            form.lblAction['text'] = "Transfering data to " + i
             form.lblAction.update_idletasks()
-            form.pBar['maximum'] = rowiter
-        print("Transfering data to", r, "...")
+            form.pBar['maximum'] = rownum
+        print("Transfering data to", i, "...")
         
-        ### transfer blocks of data with an SQL INSERT statement, keeping each block <= 999 values and iterating till finished
-        for t in range(rowiter):
-        #    try:
-                rows = dcur.fetchmany(maxrows)
-                if len(rows) > 0:
-                    dicmat = []
-                    for row in rows:
-                        dic = {}
-                        for i in range(fieldnum):
-                            dic[dcur.description[i][0]] = row[i]
-                        dicmat.append(dic)
-                    insert = table.insert().values(dicmat).prefix_with("OR IGNORE")
-                    connection.execute(insert)
+        ### transfer rows of data with an SQL INSERT statement
+        rows = dcur.fetchall()
+        isql = "INSERT OR IGNORE INTO {!s} ({!s}) VALUES ({!s});".format(i, fs_insert, ','.join('?'*len(fieldsmatch+vs)))
+        #print(isql)
+        if len(rows) > 0:
+            for row in rows:
+                connection.execute(isql,list(row) + vs)
+                #print(row)
                 if form != None:
                     form.pBar.step()
                     form.pBar.update_idletasks()
-                    form.pBar2.step(len(rows))
-                    form.pBar2.update_idletasks()
-            #except ValueError as err:
-            #    log += "Import failed for " + r + " due to scientific format in number field (too large or too small)." + '\n'
-            #    print("Import failed for: " + r + " due to scientific format in  number field (too large or too small).")
-            #    break
-    connection.execute("VACUUM")  #Compresses and defrags database
+        form.pBar2.step(rownum)
+        form.pBar2.update_idletasks()
+
+    #connection.execute("VACUUM")  #Compresses and defrags database
 
     ### close open connections
-    dcur.close()
+    connection.commit()
     connection.close()
     DIMA.close()
     return log
