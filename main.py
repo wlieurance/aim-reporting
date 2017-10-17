@@ -149,10 +149,10 @@ class MainForm:
     def choose_DIMA(self):
         if var['RDpath'] != None:
             if os.path.isfile(var['RDpath']):
-                path = tkinter.filedialog.askopenfilename(title = "Choose DIMA to import data from:", filetypes = (("Access files", "*.mdb;*.accdb"),("All files", "*.*")))
+                path = tkinter.filedialog.askopenfilename(title = "Choose DIMA to import data from:", filetypes = (("Access files", "*.mdb *.accdb"),("All files", "*.*")))
                 if path:
                     var['DIMApath'] = os.path.abspath(path)
-                    root.config(cursor="wait")
+                    root.config(cursor="watch")
                     root.update()
                     self.pBar.grid()
                     self.pBar2.grid()
