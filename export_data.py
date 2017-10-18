@@ -1,14 +1,13 @@
 import os
 import sqlite3 as sqlite
 import openpyxl
-
 import tkinter
-#separate imports needed due to tkinter idiosyncrasies
-from tkinter import ttk
-from tkinter import filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox #separate imports needed due to tkinter idiosyncrasies
 
+### local objects
 from classes import stdevs, meanw, stdevw
 
+### defines a new form used to select data the user wants to export to a list and then export it
 class ExportForm:
     def __init__(self, parent, child, RDpath, connection):
         cframe = tkinter.Frame(child)
@@ -48,6 +47,7 @@ class ExportForm:
             # print(row)
             self.lstCategory.insert(tkinter.END, row['Category'])
 
+        ### each of these 'onselect_' events defines what happens to the form when a specific widget is selected/changes selection.
         def onselect_Category(evt):
             self.lstDataType.delete(0, tkinter.END)
             self.lstScale.delete(0, tkinter.END)
@@ -59,8 +59,13 @@ class ExportForm:
                 value.append(w.get(c[i]))
             #print(value)
             self.valueCat = value
+
+            ### this sql constuctor appears multiple times in this class. The {!s} and .format() construction allows for a
+            ### variable number of ? to be inserted into the SQL for later parameter substitution. In this case it is
+            ### constructing a "WHERE IN ('some', 'values', 'here')" clause with the values coming from the selected elements of the
+            ### Category listbox.
             sql = "SELECT DataType FROM Exports_All WHERE Category IN ({!s}) GROUP BY DataType ORDER BY DataType;"
-            sql = sql.format(','.join('?'*len(self.valueCat)))
+            sql = sql.format(','.join('?'*len(self.valueCat))) 
             #print(sql)
             result = connection.execute(sql, self.valueCat)
             for row in result:
@@ -76,14 +81,6 @@ class ExportForm:
                 value.append(w.get(c[i]))
             #print(value)
             self.valueData = value
-            where1 = "'"
-            for i in value:
-                where1 = where1 + "'" + i + "', "
-            where1 = where1[1:len(where1)-2]
-            where2 = "'"
-            for i in self.valueCat:
-                where2 = where2 + "'" + i + "', "
-            where2 = where2[1:len(where2)-2]
             sql = "SELECT Scale FROM Exports_All WHERE DataType IN ({!s}) AND Category IN ({!s}) GROUP BY Scale ORDER BY Scale;"
             sql = sql.format(','.join('?'*len(self.valueData)), ",".join('?'*len(self.valueCat)))
             #print(sql)
@@ -102,6 +99,7 @@ class ExportForm:
             #print(value)
             self.valueScale = value
 
+        ### this statements bind the 'onselect_' functions with the actual action of selecting an item from a listbox.
         self.lstCategory.bind('<<ListboxSelect>>', onselect_Category)
         self.lstDataType.bind('<<ListboxSelect>>', onselect_DataType)
         self.lstScale.bind('<<ListboxSelect>>', onselect_Scale)
@@ -168,12 +166,21 @@ class ExportForm:
                     self.lblExport.update_idletasks()
                     self.lblExport['text'] = "Exporting " + row["ExportName"] + "..."
                     self.lblExport.update_idletasks()
+
+                    ### this section was an attmept to use temporary tables in order to try and deal with MemoryError exceptions.
+                    ### unfortunately the loop was attempting to drop temp tables while they were still in use by other parts of the loop.
+                    ### may still work with extra tweaking.
                     #self.connection.execute("DROP TABLE IF EXISTS OutTable;")
                     #self.connection.execute("CREATE TEMPORARY TABLE OutTable AS SELECT * FROM {!s};".format(row["ObjectName"]))
                     #obj = 'OutTable'
+                    
+                    ### figures out how many rows are in a query to be exported and then creates the relevant recordset
+                    ### unfortunately due to the size and complexity of some views this has produced MemoryError exceptions in the past.
+                    ### still needs to be fixed if possible.
                     obj = row["ObjectName"]
                     rowcount = self.connection.execute("SELECT Count(*) FROM {!s};".format(obj)).fetchone()[0]
                     result2 = self.connection.execute("SELECT * FROM {!s};".format(obj))
+
                     if rowcount == 0:
                         if not asked:
                             exportEmpty = tkinter.messagebox.askyesno("Export Blanks", "Export blank results?")
@@ -189,7 +196,7 @@ class ExportForm:
                         worksheet.append(colnames)
                         for row2 in result2:
                             d = dict(row2)
-                            for key, value in d.items(): #necessary in order to tell excel that strings starting with '=' are not formulas
+                            for key, value in d.items(): #necessary in order to tell excel that strings starting with '=' are not formulas. Not an ideal result, could use tweaking.
                                 if isinstance(value, str):
                                     if len(value) > 0:
                                         if(value[0]=='='):

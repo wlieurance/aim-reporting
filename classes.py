@@ -1,5 +1,6 @@
 import numpy
 
+### sample standard deviation
 class stdevs:
     def __init__(self):
         self.list = []
@@ -15,6 +16,7 @@ class stdevs:
             self.x = None
         return self.x
 
+### population standard deviation
 class stdevp:
     def __init__(self):
         self.list = []
@@ -30,6 +32,7 @@ class stdevp:
             self.x = None
         return self.x
 
+### weighted mean
 class meanw:
     def __init__(self):
         self.wgtlist = []
@@ -51,6 +54,7 @@ class meanw:
             self.x = None
         return self.x
 
+### weighted standard deviation
 class stdevw:
     def __init__(self):
         self.wgtlist = []

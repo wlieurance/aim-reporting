@@ -8,6 +8,7 @@ def ImportFromAccess(DIMApath, RDpath, delrecords, form = None):
     log = ""
 
     ### connect to Access DB
+    ### current only works in a windows environment because linux and mac system do not have an odbc driver for Access files.
     DIMAconstring = "Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=" + DIMApath
     DIMA = pyodbc.connect(DIMAconstring)
     dcur = DIMA.cursor()

@@ -4,11 +4,10 @@ import calendar
 import sqlite3 as sqlite
 import geomag
 import tkinter
-#separate imports needed due to tkinter idiosyncrasies
-from tkinter import ttk
-from tkinter import filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox #separate imports needed due to tkinter idiosyncrasies
 import sqlparse
 
+# local objects
 from classes import stdevs, meanw, stdevw
 
 
@@ -19,9 +18,12 @@ def run_sqlscript(conn, script_path, form = None, msg = None):
     with open(script_path) as f:
             script = f.read()
     stmts = sqlparse.split(script)
-    curlength = 1  #initial values get the while loop to run at least once.
-    pastlength = 2 #initial values get the while loop to run at least once.
+
+    ###initial values get the while loop to run at least once.
+    curlength = 1
+    pastlength = 2 
     counter = 0
+    
     while curlength < pastlength and curlength > 0:
         errors = []
         counter += 1
@@ -107,6 +109,9 @@ def Update(var, form = None):
     connection.close()
     return var
 
+### defines seasons, which the database uses to separate out plot revisits. When data are shown at the plot level,
+### a season is given to it in order to view multiple visitations of the same plot.  For above plot summations,
+### only the most recent data in a revisit cycle is used.
 def SeasonsCalc(connection):
     connection.execute("DELETE FROM SeasonDefinition")
 
@@ -138,6 +143,7 @@ def SeasonsCalc(connection):
         date = nextdate   
     return
     
+### this function is used to convert the semicolon delimitted species richness fields into individual records for ease of processing. 
 def speciesrichness(connection):
     connection.execute("DELETE FROM SR_Raw;")
     result = connection.execute("SELECT RecKey, subPlotID, SpeciesList FROM tblSpecRichDetail;")
