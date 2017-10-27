@@ -15,13 +15,13 @@ Lastly, the database requires the use of the most recent stable version of the S
 * Windows users who would prefer not to compile their own SpatiaLite library from source can also download pre-compiled binaries at [Gaia-SINS](http://www.gaia-gis.it/gaia-sins/). If a user chooses to use the pre-compiled binaries, they must put the files located in the 'mod' folder somewhere already in the system's PATH (e.g. C:\Windows\System32) or modify the system's (or user's) PATH variable to contain its location (e.g. C:\Users\someuser\somedirs\SpatiaLite\mod)
 
 ### CONSIDERATIONS FOR USERS WITHOUT SUPERUSER PRIVILEGES OR BEHIND FIREWALLS
-* Python relies on a package system where users may be downloading multiple packages specific to their use. If the user does not have root/administrator access the best practice is probably to install python in their home/User directory.  This is the default install location for at least the Windows Python install. If a user has their sysadmin install Python to a system directory, it is important to also have them install all the required packages and libraries at that time as well.
-* For those users behind a firewall which is not finding packages due to SSL/TLS certificate errors, you can alter you pip command in the following way: *pip install --index-url=http://pypi.python.org/simple/ --trusted-host pypi.python.org pythonPackageToInstall*
-* It is also possible to install the SpatiaLite libraries in your home/User directory.  The basic process would be to: 
+* Python relies on a package system where users may be downloading multiple packages specific to their use. If the user does not have root/administrator access, the best practice is probably to install python in their home/User directory.  This is the default install location for at least the Windows Python install. If a user has their sysadmin install Python to a system directory, it is important to also have them install all the required packages and libraries also at that time.
+* For those users behind a firewall who are not finding packages (with pip) due to SSL/TLS certificate errors, you can alter you pip command in the following way: *pip install --index-url=http://pypi.python.org/simple/ --trusted-host pypi.python.org pythonPackageToInstall*
+* It is also possible to install the SpatiaLite libraries in your home or User directory.  The basic process would be to: 
   1. Place the libraries in an appropriate location (e.g. C:\Users\someuser\somedirs\SpatiaLite\mod)
   2. From the start menu go to _Search for Programs and Files_ and type _Edit environment variables for your account_, then choose the resulting option.
   3. Click on the PATH Variable in the Environment Variables dialog box and hit the _Edit..._ button.
-  4. Go to the end of the Variable value text in the Edit User Variable and append a semicolon followed by the directory of the path where the SpatiaLite libraries are (e.g. Long\String\of\Other\Directories;C:\Users\someuser\somedirs\SpatiaLite\mod).
+  4. Go to the end of the Variable value text in the _Edit User Variable_ and append a semicolon followed by the directory of the path where the SpatiaLite libraries are located (e.g. Long\String\of\Other\Directories;C:\Users\someuser\somedirs\SpatiaLite\mod).
   5. Hit _OK_ and _OK_ again.  Now your system knows where to find the SpatiaLite libraries (restart may be required).
 
 
