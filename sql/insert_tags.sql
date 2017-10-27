@@ -136,7 +136,8 @@ INSERT OR IGNORE INTO SpeciesTags SELECT a.SpeciesCode,
 INSERT OR IGNORE INTO SpeciesTags SELECT a.SpeciesCode,
                                          a.[Group]
                                     FROM tblSpecies AS a
-                                   WHERE a.[Group] IS NOT NULL;
+                                   WHERE a.[Group] IS NOT NULL AND
+									     a.[Group] != "";
 
 COMMIT TRANSACTION ; 
 
