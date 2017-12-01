@@ -154,7 +154,7 @@ INSERT INTO Exports (Category, DataType, Scale, ObjectName, ExportName) VALUES
 ('Calculation', 'Soil Stability', 'Line', 'SoilStab_Line', 'SoilStability_Line'), 
 ('Calculation', 'Species Richness', 'Line', 'SR_Line', 'SR_Line'), 
 ('Method', 'Line Intercept', 'Raw', 'LI_Raw_Final', 'LI_Raw'), 
-('Method', 'Line-point Intercept', 'Raw', 'LPI_CanopyLayers_Point_DB_RestrictDates', 'LPI_Raw'), 
+('Method', 'Line-point Intercept', 'Raw', 'LPI_Raw', 'LPI_Raw'), 
 ('Method', 'Plant Density', 'Raw', 'PD_Raw_Final', 'PD_Raw'), 
 ('Method', 'Soil Stability', 'Raw', 'SoilStab_Raw_Final', 'SAS_Raw'), 
 ('Method', 'Species Richness', 'Raw', 'SR_Raw_Final', 'SR_Raw'), 

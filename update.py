@@ -19,11 +19,17 @@ def run_sqlscript(conn, script_path, form = None, msg = None):
             script = f.read()
     stmts = sqlparse.split(script)
 
-    ###initial values get the while loop to run at least once.
+    ### update messages
+    if msg != None:
+        print(msg)
+    if form != None:
+        form.lblAction['text'] = msg
+        form.lblAction.update_idletasks()
+        
+    ### initial values get the while loop to run at least once.
     curlength = 1
     pastlength = 2 
     counter = 0
-    
     while curlength < pastlength and curlength > 0:
         errors = []
         counter += 1
@@ -31,17 +37,13 @@ def run_sqlscript(conn, script_path, form = None, msg = None):
         pastlength = len(stmts)
         for stmt in stmts:
             try:
+                #print(stmt,'\n','------------------------------------------------------','\n','------------------------------------------------------')
                 conn.execute(stmt)
                 stmts = [x for x in stmts if x != stmt] #removes SQL statement from list if completed successfully]
             except sqlite.OperationalError:
                 errors.append(stmt)
         curlength = len(stmts)   
 
-    if msg != None:
-        print(msg)
-        if form != None:
-            form.lblAction['text'] = msg
-            form.lblAction.update_idletasks()
     if len(stmts) == 0:
         return (True, None)
     else:
@@ -67,14 +69,22 @@ def Update(var, form = None):
 
     ### converts DIMA species list semi-colon concatenated values to individual species records for ease of processing.
     speciesrichness(connection)
-    ### defines how to group plots together when looking at plot level info. Only one plot with the same plotkey is shown per season.
-    SeasonsCalc(connection)
     ### runs update SQL script to perform various post import updates given in the script.
     run_sqlscript(connection, script_path = os.path.join(sqldir, 'update.sql'), form = form, msg = 'Running update script...')
     ### runs insert_tags SQL script to automatically create some species and plot tags given in the SQL script (e.g. sagebrush = woody Artemisia sp.)
     run_sqlscript(connection, script_path = os.path.join(sqldir, 'insert_tags.sql'), form = form, msg = r'Inserting plot/species tags into database...')
+    ### runs insert_custom SQL script to insert custom data defined by the user into the db.
+    run_sqlscript(connection, script_path = os.path.join(sqldir, 'insert_custom.sql'), form = form, msg = r'Inserting custom data into the database...')
+    ### defines how to group plots together when looking at plot level info. Only one plot with the same plotkey is shown per season.
+    SeasonsCalc(connection)
     
     ### add declination information to tblPlots
+    msg = "Adding declination information to plots."
+    print(msg)
+    if form != None:
+        form.lblAction['text'] = msg
+        form.lblAction.update_idletasks()
+        
     if var['WMMpath'] == None:
         getwmm = True
     elif not os.path.isfile(var['WMMpath']):
@@ -91,18 +101,21 @@ def Update(var, form = None):
     if mmpath:
         gm = geomag.geomag.GeoMag(mmpath)
         i = connection.cursor()
-        rows = connection.execute("SELECT PlotKey, Latitude, Longitude, Elevation, ElevationType, EstablishDate, "
+        rows = connection.execute("SELECT PlotKey, PlotID, Latitude, Longitude, Elevation, ElevationType, EstablishDate, "
                          "Declination FROM tblPlots WHERE PlotKey NOT IN ('888888888','999999999') AND Declination IS NULL;")
         for row in rows:
-            dt = datetime.datetime.strptime(row['EstablishDate'],'%Y-%m-%d %H:%M:%S')
-            if row['ElevationType'] == 1:
-                elev = row['Elevation']*3.28084
-            elif row['ElevationType'] == 2:
-                elev = row['Elevation']
+            if row['EstablishDate']:
+                dt = datetime.datetime.strptime(row['EstablishDate'],'%Y-%m-%d %H:%M:%S')
+                if row['ElevationType'] == 1:
+                    elev = row['Elevation']*3.28084
+                elif row['ElevationType'] == 2:
+                    elev = row['Elevation']
+                else:
+                    elev = 0
+                mag = gm.GeoMag(row['Latitude'],row['Longitude'], elev, dt.date())
+                i.execute("UPDATE tblPlots SET Declination = ? WHERE PlotKey = ?;",(mag.dec, row['PlotKey']),)
             else:
-                elev = 0
-            mag = gm.GeoMag(row['Latitude'],row['Longitude'], elev, dt.date())
-            i.execute("UPDATE tblPlots SET Declination = ? WHERE PlotKey = ?;",(mag.dec, row['PlotKey']),)
+                print("Plot", row['PlotID'], "has no EstablishDate. Skipping.")
         connection.commit()
 
     #connection.execute("VACUUM")

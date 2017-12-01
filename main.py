@@ -37,7 +37,7 @@ class MainForm:
         self.btnImport = ttk.Button(master, text='Import DIMA Data', style="TButton", command=self.choose_DIMA)
         self.btnImport.grid(row=1, column=1)
 
-        self.btnOptions = ttk.Button(master, text='Run SQL Script', style="TButton", command=self.SQLscript)
+        self.btnOptions = ttk.Button(master, text='Recalculate', style="TButton", command=self.recalc)
         self.btnOptions.grid(row=1, column=2)
 
         self.btnChRD = ttk.Button(master, text='Create New Database', style="TButton", command=self.create_RD)
@@ -45,6 +45,9 @@ class MainForm:
 
         self.btnExport = ttk.Button(master, text='Export', style="TButton", command=self.Export_RD)
         self.btnExport.grid(row=2, column=1)
+
+        self.btnOptions = ttk.Button(master, text='Run SQL Script', style="TButton", command=self.SQLscript)
+        self.btnOptions.grid(row=2, column=2)
 
         self.lblAction = ttk.Label(master, text="", width=47)
         self.lblAction.grid(row=3, column=0, columnspan=2, sticky="W")
@@ -174,6 +177,7 @@ class MainForm:
                     var1 = Update(var, self)
 
                     root.config(cursor="")
+                    root.update()
                     self.lblAction['text'] = ""
                     self.lblProgress['text'] = ""
                     self.pBar2.grid_remove()
@@ -196,7 +200,7 @@ class MainForm:
             if os.path.isfile(var['RDpath']):
 
                 ### main export function
-                Export(var['RDpath'], self)
+                Export(var['RDpath'], root, self)
                 
             else:
                 tkinter.messagebox.showerror("Error", "Current database path does not exist. Please connect to valid database.")
@@ -204,12 +208,33 @@ class MainForm:
             tkinter.messagebox.showerror("Error", "Database path not chosen. Please connect to valid database or create a new one first.")
 
     def SQLscript(self):
-        if RDpath != None:
-            if os.path.isfile(RDpath):
+        if var['RDpath'] != None:
+            if os.path.isfile(var['RDpath']):
                 conn = sqlite.connect(var['RDpath'])
                 run_sqlscript(conn, None)
                 tkinter.messagebox.showinfo("Done.", "SQL script run.")
+                self.lblAction['text'] = ''
+                self.lblAction.update_idletasks()
                 conn.close()
+            else:
+                tkinter.messagebox.showerror("Error", "Current database path does not exist. Please connect to valid database.")
+        else:
+            tkinter.messagebox.showerror("Error", "Database path not chosen. Please connect to valid database or create a new one first.")
+
+    def recalc(self):
+        if var['RDpath'] != None:
+            if os.path.isfile(var['RDpath']):
+                conn = sqlite.connect(var['RDpath'])
+                ### runs process SQL script to generate intermediate data in the database.
+                root.config(cursor="watch")
+                root.update()
+                run_sqlscript(conn, script_path = os.path.join(var['SQLpath'], 'process.sql'), form = self, msg = r'Doing calculations on intermediate data...')
+                tkinter.messagebox.showinfo("Done.", "Recalculations complete.")
+                self.lblAction['text'] = ''
+                self.lblAction.update_idletasks()
+                conn.close()
+                root.config(cursor="")
+                root.update()
             else:
                 tkinter.messagebox.showerror("Error", "Current database path does not exist. Please connect to valid database.")
         else:

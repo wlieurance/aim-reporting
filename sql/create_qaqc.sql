@@ -400,135 +400,68 @@ INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, 
 VALUES(1.0,'QAQC_SpeciesMethods','All Methods','Species Tracking','Use this query to identify the lines/plots where a species code occurs in all methods with species codes.',NULL,'SpeciesMethods',NULL,NULL);			  
 
 CREATE VIEW QAQC_SpeciesMethods AS
-    SELECT x.SiteID,
-           x.SiteName,
-           y.PlotID,
-           z.Season,
-           z.Species,
-           group_concat(z.Method, ';') AS Methods
-      FROM tblSites AS x
-           JOIN
-           tblPlots AS y ON x.SiteKey = y.Sitekey
-           JOIN
-           (
-               SELECT PlotKey,
-                      (
-                          SELECT SeasonLabel
-                            FROM SeasonDefinition
-                           WHERE FormDate BETWEEN SeasonStart AND SeasonEnd
-                      )
-                      AS Season,
-                      'LPI' AS Method,
-                      Species
-                 FROM (
-                          SELECT a.*
-                            FROM LPI_CanopyLayers_Point_DB_UNION AS a
-                                 JOIN
-                                 tblSpecies AS b ON a.Species = b.SpeciesCode
-                      )
-                GROUP BY PlotKey,
-                         Season,
-                         Method,
-                         Species
-               UNION
-               SELECT d.PlotKey,
-                      (
-                          SELECT SeasonLabel
-                            FROM SeasonDefinition
-                           WHERE FormDate BETWEEN SeasonStart AND SeasonEnd
-                      )
-                      AS Season,
-                      a.Method,
-                      a.Species
-                 FROM LI_Detail_View AS a
-                      JOIN
-                      LI_Header_View AS b ON a.RecKey = b.RecKey
-                      JOIN
-                      tblLines AS c ON b.LineKey = c.LineKey
-                      JOIN
-                      tblPlots AS d ON c.PlotKey = d.PlotKey
-                      JOIN
-                      tblSpecies AS e ON a.Species = e.SpeciesCode
-                GROUP BY d.PlotKey,
-                         Season,
-                         a.Method,
-                         a.Species
-               UNION
-               SELECT a.PlotKey,
-                      (
-                          SELECT SeasonLabel
-                            FROM SeasonDefinition
-                           WHERE FormDate BETWEEN SeasonStart AND SeasonEnd
-                      )
-                      AS Season,
-                      'Plant Density' AS Method,
-                      a.SpeciesCode AS Species
-                 FROM PD_Raw_Final AS a
-                      JOIN
-                      tblSpecies AS b ON a.SpeciesCode = b.SpeciesCode
-                GROUP BY Plotkey,
-                         Season,
-                         Method,
-                         Species
-               UNION
-               SELECT a.PlotKey,
-                      (
-                          SELECT SeasonLabel
-                            FROM SeasonDefinition
-                           WHERE b.FormDate BETWEEN SeasonStart AND SeasonEnd
-                      )
-                      AS Season,
-                      'Production' AS Method,
-                      c.SpeciesCode AS Species
-                 FROM tblPlots AS a
-                      JOIN
-                      tblPlantProdHeader AS b ON a.PlotKey = b.PlotKey
-                      JOIN
-                      tblPlantProdDetail AS c ON b.RecKey = c.RecKey
-                      JOIN
-                      tblSpecies AS d ON c.SpeciesCode = d.SpeciesCode
-                GROUP BY a.PlotKey,
-                         Season,
-                         Method,
-                         Species
-               UNION
-               SELECT a.PlotKey,
-                      (
-                          SELECT SeasonLabel
-                            FROM SeasonDefinition
-                           WHERE c.FormDate BETWEEN SeasonStart AND SeasonEnd
-                      )
-                      AS Season,
-                      'Species Richness' AS Method,
-                      d.SpeciesCode AS Species
-                 FROM tblPlots AS a
-                      JOIN
-                      tblLines AS b ON a.PlotKey = b.PlotKey
-                      JOIN
-                      tblSpecRichHeader AS c ON b.LineKey = c.LineKey
-                      JOIN
-                      SR_Raw AS d ON c.RecKey = d.RecKey
-                      JOIN
-                      tblSpecies AS e ON d.SpeciesCode = e.SpeciesCode
-                GROUP BY a.PlotKey,
-                         Season,
-                         Method,
-                         Species
-                ORDER BY PLotKey,
-                         Season,
-                         Species,
-                         Method
-           )
-           AS z ON y.PlotKey = z.PlotKey
-     GROUP BY SiteID,
-              PlotID,
-              Season,
-              Species
-     ORDER BY SiteID,
-              PlotID,
-              Season,
-              Species,
-              Methods; 
+SELECT x.SiteID, x.SiteName, y.PlotID, z.Season, z.Species,
+       group_concat(z.Method, ';') AS Methods
+  FROM tblSites AS x
+ INNER JOIN tblPlots AS y ON x.SiteKey = y.Sitekey
+ INNER JOIN (
+            SELECT PlotKey,
+                   (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                   'LPI' AS Method,
+                   Species
+              FROM (SELECT d.PlotKey, c.FormDate, a.*
+                      FROM lpi_detail AS a
+                     INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+                     INNER JOIN tblLPIHeader AS c ON a.RecKey = c.RecKey
+                     INNER JOIN tblLines AS d ON c.LineKey = d.LineKey)
+             GROUP BY PlotKey, Season, Method, Species
+              
+             UNION
+            SELECT d.PlotKey,
+                   (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                   a.Method, a.Species
+              FROM LI_Detail_View AS a
+             INNER JOIN LI_Header_View AS b ON a.RecKey = b.RecKey
+             INNER JOIN tblLines AS c ON b.LineKey = c.LineKey
+             INNER JOIN tblPlots AS d ON c.PlotKey = d.PlotKey
+             INNER JOIN tblSpecies AS e ON a.Species = e.SpeciesCode
+             GROUP BY d.PlotKey, Season, a.Method, a.Species
+               
+             UNION
+            SELECT a.PlotKey,
+                   (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                   'Plant Density' AS Method,
+                   a.SpeciesCode AS Species
+              FROM PD_Raw_Final AS a
+             INNER JOIN tblSpecies AS b ON a.SpeciesCode = b.SpeciesCode
+             GROUP BY Plotkey, Season, Method, Species
+             
+             UNION
+            SELECT a.PlotKey,
+                   (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                   'Production' AS Method,
+                   c.SpeciesCode AS Species
+              FROM tblPlots AS a
+             INNER JOIN tblPlantProdHeader AS b ON a.PlotKey = b.PlotKey
+             INNER JOIN tblPlantProdDetail AS c ON b.RecKey = c.RecKey
+             INNER JOIN tblSpecies AS d ON c.SpeciesCode = d.SpeciesCode
+             GROUP BY a.PlotKey, Season, Method, Species
+             
+             UNION
+            SELECT a.PlotKey,
+                   (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                   'Species Richness' AS Method,
+                   d.SpeciesCode AS Species
+              FROM tblPlots AS a
+             INNER JOIN tblLines AS b ON a.PlotKey = b.PlotKey
+             INNER JOIN tblSpecRichHeader AS c ON b.LineKey = c.LineKey
+             INNER JOIN SR_Raw AS d ON c.RecKey = d.RecKey
+             INNER JOIN tblSpecies AS e ON d.SpeciesCode = e.SpeciesCode
+             GROUP BY a.PlotKey, Season, Method, Species
+             ORDER BY PlotKey, Season, Species, Method
+            ) AS z ON y.PlotKey = z.PlotKey
+ GROUP BY SiteID, PlotID, Season, Species
+ ORDER BY SiteID, PlotID, Season, Species, Methods; 
 			  
 --QAQC_CLI_LengthLessMin
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
@@ -2147,30 +2080,14 @@ INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, 
 VALUES(1.0,'QAQC_LPI_HeightsMissingOrIncorrect','Line-point Intercept','Data Criterion Failure','There is a height at a non-standard point location (not divisiable by Criteria)',NULL,'LPI_HeightsMissingOrIncorrect','PointNbr','');
 
 CREATE VIEW QAQC_LPI_HeightsMissingOrIncorrect AS
-    SELECT RecKey || ';' || PointNbr || ';' || Category AS ErrorKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           Species,
-           ChkBox,
-           Height,
-           Category,
-           Rank
-      FROM LPI_CanopyLayers_Point_DB_UNION
-     WHERE (Height IS NOT NULL AND 
-            Height <> '' AND 
-            PointNbr % 5 <> 0) OR 
-           ( (Height IS NULL OR 
-              Height = '') AND 
-             PointNbr % 5 = 0 AND 
-             Category IN ('Woody', 'Herbaceous') ) 
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              PointNbr,
-              Category;
+SELECT a.RecKey || ';' || a.PointNbr || ';' || a.Category AS ErrorKey,
+       c.SiteID, c.PlotID, c.LineID, b.FormDate, a.PointNbr, a.Species, a.ChkBox, a.Height, a.Category, a.Layer
+  FROM lpi_detail AS a
+ INNER JOIN tblLPIHeader AS b ON a.RecKey = b.RecKey
+ INNER JOIN joinSitePlotLine AS c ON b.LineKey = c.LineKey
+ WHERE (Height IS NOT NULL AND Height <> '' AND PointNbr % 5 <> 0) OR 
+       ((Height IS NULL OR Height = '') AND PointNbr % 5 = 0 AND Category IN ('Woody', 'Herbaceous') ) 
+ ORDER BY SiteID, PlotID, LineID, PointNbr, Category;
 			  
 			  
 --QAQC_LPI_Species_NoGrowthHabitDuration
@@ -2178,23 +2095,16 @@ INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, 
 VALUES(3.0,'QAQC_LPI_Species_NoGrowthHabitDuration','Line-point Intercept','Data Criterion Failure','A species was used in this line''s data that does not have a growth habit or does not have a duration assigned to it in the state species list.',NULL,'LPI_SpeciesNoGrowthHabitDur','GrowthHabit OR Duration','Not Null');
 
 CREATE VIEW QAQC_LPI_Species_NoGrowthHabitDuration AS
-    SELECT a.PlotKey || ';' || a.Species AS ErrorKey,
-           a.SiteID,
-           a.PlotID,
-           a.Species,
-           b.Duration,
-           c.GrowthHabitSub
-      FROM LPI_CanopyLayers_Point_DB_UNION AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-     WHERE b.Duration IS NULL OR 
-           c.GrowthHabitSub IS NULL
-     GROUP BY a.PlotKey,
-              a.Species
-     ORDER BY SiteID,
-              PlotID;
+SELECT e.PlotKey || ';' || a.Species AS ErrorKey,
+       e.SiteID, e.PlotID, a.Species, b.Duration, c.GrowthHabitSub
+  FROM lpi_detail AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+ INNER JOIN tblLPIHeader AS d ON a.RecKey = d.RecKey
+ INNER JOIN joinSitePlotLine AS e ON d.LineKey = e.LineKey
+ WHERE b.Duration IS NULL OR c.GrowthHabitSub IS NULL
+ GROUP BY e.PlotKey, a.Species
+ ORDER BY SiteID, PlotID;
 			  
 			  
 --QAQC_LPI_FormDateCheck
@@ -2676,28 +2586,15 @@ INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, 
 VALUES(9.0,'QAQC_LPI_Species_NotInSpeciesList','Line-point Intercept','Missing Data','There was a Species code used in LPI that is not present in the Master Species List',NULL,'LPI_Species_NotInSpeciesList','Species',NULL);
 
 CREATE VIEW QAQC_LPI_Species_NotInSpeciesList AS
-    SELECT a.RecKey || ';' || a.PointNbr || ';' || a.Category AS ErrorKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           a.PointNbr,
-           a.Species,
-           a.Category,
-           a.Rank
-      FROM LPI_CanopyLayers_Point_DB_UNION AS a
-           LEFT JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           NonSpeciesCodes AS c ON a.Species = c.Code
-     WHERE a.Species IS NOT NULL AND 
-           c.Code IS NULL AND 
-           b.SpeciesCode IS NULL
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              PointNbr,
-              Category;
+SELECT a.RecKey || ';' || a.PointNbr || ';' || a.Category AS ErrorKey,
+       e.SiteID, e.PlotID, e.LineID, d.FormDate, a.PointNbr, a.Species, a.Category, a.Layer
+  FROM lpi_detail AS a
+  LEFT JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN NonSpeciesCodes AS c ON a.Species = c.Code
+ INNER JOIN tblLPIHeader AS d ON a.RecKey = d.RecKey
+ INNER JOIN joinSitePlotLine AS e ON d.LineKey = e.LineKey
+ WHERE a.Species IS NOT NULL AND c.Code IS NULL AND b.SpeciesCode IS NULL
+ ORDER BY SiteID, PlotID, LineID, PointNbr, Category;
 			  
 			  
 --QAQC_LPI_Header_OrphanRecordCheck
@@ -5186,73 +5083,33 @@ INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, 
 VALUES(6.0,'QAQC_SR_LPI_SpeciesNotInSR','Species Richness','Missing Data','There is a species in LPI not in Species Richness.',NULL,'SR_SpeciesInLPI_NotSR',NULL,NULL);
 			
 CREATE VIEW QAQC_SR_LPI_SpeciesNotInSR AS
-    SELECT q.PlotKey || ';' || q.Season || ';' || q.Species AS ErrorKey,
-           q.*
-      FROM (
-               SELECT x.*
-                 FROM (
-                          SELECT a.SiteID,
-                                 a.PlotKey,
-                                 a.PlotID,
-                                 (
-                                     SELECT SeasonLabel
-                                       FROM SeasonDefinition
-                                      WHERE a.FormDate BETWEEN SeasonStart AND SeasonEnd
-                                 )
-                                 AS Season,
-                                 a.Species
-                            FROM LPI_CanopyLayers_Point_DB_UNION AS a
-                           GROUP BY PlotKey,
-                                    Season,
-                                    Species
-                      )
-                      AS x
-                      JOIN
-                      tblSpecies AS y ON x.Species = y.SpeciesCode
-           )
-           AS q
-           LEFT JOIN
-           (
-               SELECT x.SiteID,
-                      x.SiteName,
-                      x.PlotKey,
-                      x.PlotID,
-                      x.Season,
-                      x.SpeciesCode
-                 FROM (
-                          SELECT a.SiteID,
-                                 a.SiteName,
-                                 b.PlotKey,
-                                 b.PlotID,
-                                 (
-                                     SELECT SeasonLabel
-                                       FROM SeasonDefinition
-                                      WHERE d.FormDate BETWEEN SeasonStart AND SeasonEnd
-                                 )
-                                 AS Season,
-                                 e.SpeciesCode
-                            FROM tblSites AS a
-                                 JOIN
-                                 tblPlots AS b ON a.SiteKey = b.SiteKey
-                                 JOIN
-                                 tblLines AS c ON b.PlotKey = c.PlotKey
-                                 JOIN
-                                 tblSpecRichHeader AS d ON c.LineKey = d.LineKey
-                                 JOIN
-                                 SR_Raw AS e ON d.RecKey = e.RecKey
-                           WHERE a.SiteKey NOT IN ('888888888', '999999999') 
-                           GROUP BY PlotID,
-                                    Season,
-                                    SpeciesCode
-                      )
-                      AS x
-           )
-           AS r ON q.PlotKey = r.PlotKey AND 
-                   q.Season = r.Season AND 
-                   q.Species = r.SpeciesCode
-     WHERE r.SpeciesCode IS NULL AND 
-           q.Species NOT IN ('AF00', 'PF00', 'AG00', 'PG00', 'SH00', 'TR00', 'SU00', 'AF000', 'PF000', 'AG000', 'PG000', 'SH000', 'TR000', 'SU000', 'AAFF', 'PPFF', 'AAGG', 'PPGG', 'PPSH', 'PPTR', 'PPSU');
-
+SELECT q.PlotKey || ';' || q.Season || ';' || q.Species AS ErrorKey,
+       q.*
+  FROM (SELECT x.*
+          FROM (SELECT c.SiteID, c.PlotKey, c.PlotID,
+                       (SELECT SeasonLabel FROM SeasonDefinition WHERE b.FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                       a.Species
+                  FROM lpi_detail AS a
+                 INNER JOIN tblLPIHeader AS b ON a.RecKey = b.RecKey
+                 INNER JOIN joinSitePlotLine AS c ON b.LineKey = c.LineKey
+                 GROUP BY PlotKey, Season, Species) AS x
+         INNER JOIN tblSpecies AS y ON x.Species = y.SpeciesCode) AS q
+          LEFT JOIN (SELECT x.SiteID, x.SiteName, x.PlotKey, x.PlotID, x.Season, x.SpeciesCode
+                       FROM (SELECT a.SiteID, a.SiteName, b.PlotKey, b.PlotID,
+                                    (SELECT SeasonLabel FROM SeasonDefinition WHERE d.FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                                    e.SpeciesCode
+                               FROM tblSites AS a
+                              INNER JOIN tblPlots AS b ON a.SiteKey = b.SiteKey
+                              INNER JOIN tblLines AS c ON b.PlotKey = c.PlotKey
+                              INNER JOIN tblSpecRichHeader AS d ON c.LineKey = d.LineKey
+                              INNER JOIN SR_Raw AS e ON d.RecKey = e.RecKey
+                              WHERE a.SiteKey NOT IN ('888888888', '999999999') 
+                      GROUP BY PlotID, Season, SpeciesCode) AS x
+                    ) AS r ON q.PlotKey = r.PlotKey AND q.Season = r.Season AND q.Species = r.SpeciesCode
+ WHERE r.SpeciesCode IS NULL AND 
+       q.Species NOT IN ('AF00', 'PF00', 'AG00', 'PG00', 'SH00', 'TR00', 'SU00', 'AF000', 'PF000', 'AG000', 'PG000', 
+                         'SH000', 'TR000', 'SU000', 'AAFF', 'PPFF', 'AAGG', 'PPGG', 'PPSH', 'PPTR', 'PPSU');
+						 
 		   
 --QAQC_SR_LI_SpeciesNotInSR
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 

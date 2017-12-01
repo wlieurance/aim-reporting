@@ -1,6 +1,8 @@
 import os
+import sys
 import sqlite3 as sqlite
-import openpyxl
+#import openpyxl
+import xlsxwriter
 import tkinter
 from tkinter import ttk, filedialog, messagebox #separate imports needed due to tkinter idiosyncrasies
 
@@ -154,14 +156,16 @@ class ExportForm:
             os.remove(path)
         if path:
             try:
-                workbook = openpyxl.Workbook()
+                ##workbook = openpyxl.Workbook() #openpyxl
+                workbook = xlsxwriter.Workbook(path, {'constant_memory': True}) #xlsxwriter
                 exportEmpty = True # this checks to see if the user wants to export empty views/tables
                 asked = False # this keeps track of whether the user was asked to export blanks or not
                 for row in result:
-                    if os.path.isfile(path):    
-                        workbook = openpyxl.load_workbook(filename = path)
-                    else:
-                        workbook = openpyxl.Workbook()
+                    ### openpyxl
+                    #if os.path.isfile(path):    
+                    #    workbook = openpyxl.load_workbook(filename = path)
+                    #else:
+                    #    workbook = openpyxl.Workbook()
                     self.lblExport['text'] = "                                                                                          "
                     self.lblExport.update_idletasks()
                     self.lblExport['text'] = "Exporting " + row["ExportName"] + "..."
@@ -170,14 +174,14 @@ class ExportForm:
                     ### this section was an attmept to use temporary tables in order to try and deal with MemoryError exceptions.
                     ### unfortunately the loop was attempting to drop temp tables while they were still in use by other parts of the loop.
                     ### may still work with extra tweaking.
-                    #self.connection.execute("DROP TABLE IF EXISTS OutTable;")
-                    #self.connection.execute("CREATE TEMPORARY TABLE OutTable AS SELECT * FROM {!s};".format(row["ObjectName"]))
-                    #obj = 'OutTable'
+                    obj = '_'.join(("temp",row["ObjectName"]))
+                    self.connection.execute("DROP TABLE IF EXISTS {!s};".format(obj))
+                    self.connection.execute("CREATE TEMPORARY TABLE {!s} AS SELECT * FROM {!s};".format(obj, row["ObjectName"]))
                     
                     ### figures out how many rows are in a query to be exported and then creates the relevant recordset
                     ### unfortunately due to the size and complexity of some views this has produced MemoryError exceptions in the past.
                     ### still needs to be fixed if possible.
-                    obj = row["ObjectName"]
+                    #obj = row["ObjectName"]
                     rowcount = self.connection.execute("SELECT Count(*) FROM {!s};".format(obj)).fetchone()[0]
                     result2 = self.connection.execute("SELECT * FROM {!s};".format(obj))
 
@@ -185,36 +189,58 @@ class ExportForm:
                         if not asked:
                             exportEmpty = tkinter.messagebox.askyesno("Export Blanks", "Export blank results?")
                             asked = True
-                    if rowcount > 0 or (rowcount == 0 and exportEmpty):          
+                    if rowcount > 0 or (rowcount == 0 and exportEmpty):
                         print("Exporting",row["ExportName"],"...")
-                        if os.path.isfile(path):
-                            worksheet = workbook.create_sheet(title=row["ExportName"])
-                        else:
-                            worksheet = workbook.active
-                            worksheet.title = row["ExportName"]
+                        ### openpyxl
+                        #if os.path.isfile(path):
+                        #    worksheet = workbook.create_sheet(title=row["ExportName"])
+                        #else:
+                        #   worksheet = workbook.active
+                        #    worksheet.title = row["ExportName"]
+                        ### xlsxwriter
+                        worksheet = workbook.add_worksheet(row["ExportName"])
                         colnames = [desc[0] for desc in result2.description]
-                        worksheet.append(colnames)
+                        #worksheet.append(colnames)          ### openpyxl
+                        worksheet.write_row('A1', colnames) ### xlsxwriter
+                        rcount = 1
                         for row2 in result2:
+                            rcount += 1
                             d = dict(row2)
                             for key, value in d.items(): #necessary in order to tell excel that strings starting with '=' are not formulas. Not an ideal result, could use tweaking.
                                 if isinstance(value, str):
                                     if len(value) > 0:
                                         if(value[0]=='='):
                                             d[key]= ''.join(("'",value))
-                            worksheet.append(list(d.values()))
-                        workbook.save(path)
+                            ### openpyxl
+                            #worksheet.append(list(d.values()))
+                            ### xlsxwriter
+                            worksheet.write_row(''.join(('A',str(rcount))), list(d.values()))
+                        ### openpyxl
+                        #try:
+                        #    workbook.save(path)
+                        #except (ValueError, MemoryError):
+                        #    print(rcount, d)
+                        #    print("Unexpected error:", sys.exc_info()[0])
+                        #    raise
                     else:
                         print("Skipping",row["ExportName"],"...")
+                ### xlsxwriter
+                workbook.close()
                 print("Finished Exporting.")
                 tkinter.messagebox.showinfo("Success", "Export complete.")
                 self.lblExport['text'] = "Export:"
                 self.lblExport.update_idletasks()
                 self.clearall()
-
+                
             except PermissionError:
                 tkinter.messagebox.showinfo("Error", "Could not access" + os.linesep + path + os.linesep +"File may be in use.")
+            except MemoryError:
+                workbook.close() #xlsxwriter
+                tkinter.messagebox.showinfo("Error", "Out of Memory. Please try again with fewer selections.")
+                #raise
+                
 
-def Export(RDpath, form = None):
+def Export(RDpath, root, form = None):
     dirpath = os.path.dirname(RDpath)
     dbname = os.path.basename(RDpath)
     conn = sqlite.connect(RDpath)

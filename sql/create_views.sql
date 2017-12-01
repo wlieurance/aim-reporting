@@ -24,42 +24,7 @@ CREATE VIEW CodeTags_Grouped AS
               Category
      ORDER BY Category,
               Tag;
-			  
--- View: Cover_Line
-/* The final Line level product for Cover. Gets cover information from LPI and LI penultimate products. */
-CREATE VIEW Cover_Line AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           Method,
-           LineSize,
-           LineSizeUnits,
-           Duration,
-           IndicatorCategory,
-           Indicator,
-           HitCategory,
-           IndicatorSum,
-           CoverPct,
-           ChkPct
-      FROM LPI_Line_IndicatorsCalc
-     WHERE HitCategory <> 'Height'
-    UNION
-    SELECT *
-      FROM LI_Line_Cover
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              Method,
-              IndicatorCategory,
-              Indicator,
-              Duration;
-			  
+			  			  
 -- View: Cover_Plot
 /* The final Plot level product for Cover. Gets cover information from LPI and LI penultimate products. Uses Seasons to delineate multiple 
  samples of the same plots. */
@@ -103,109 +68,54 @@ CREATE VIEW Cover_Plot AS
               Duration;
 			  
 -- View: Cover_Tag
-/* Final product for Cover on the above-plot level. Uses weighted mean and standard deviation functions given in the classes.py file. */
+/* Final product for Cover on the above-plot level. Uses weighted mean and standard deviation functions given in the classes.py file. 
+Missing cover values are replaced by a zero. Missing Chkbox values remain NULL. */
 CREATE VIEW Cover_Tag AS
-    SELECT a.Tag,
-           b.Method,
-           b.Duration,
-           b.IndicatorCategory,
-           b.Indicator,
-           b.HitCategory,
-           Count(b.PlotKey) AS Plot_n,
-           meanw(b.CoverPctMean, a.Weight) AS CoverPctMean,
-           stdevw(b.CoverPctMean, a.Weight) AS CoverPctSD,
-           meanw(b.ChkPctMean, a.Weight) AS ChkPctMean,
-           stdevw(b.ChkPctMean, a.Weight) AS ChkPctSD
-      FROM PlotTags AS a
-           JOIN
-           Cover_Plot AS b ON a.PlotKey = b.PlotKey
-     GROUP BY a.Tag,
-              b.Method,
-              b.Duration,
-              b.IndicatorCategory,
-              b.Indicator,
-              b.HitCategory
-     ORDER BY a.Tag,
-              b.Method,
-              b.Duration,
-              b.IndicatorCategory,
-              b.Indicator,
-              b.HitCategory;
+SELECT Tag, Method, Duration, IndicatorCategory, Indicator, HitCategory,
+       count(CoverPctMean) AS cover_n, meanw(CoverPctMean, Weight) AS CoverPctMean, stdevw(CoverPctMean, Weight) AS CoverPctSD,
+       count(ChkPctMean) AS chk_n, meanw(ChkPctMean, Weight) AS ChkPctMean, stdevw(ChkPctMean, Weight) AS ChkPctSD
+  FROM 
+       (SELECT a.*,
+               CASE WHEN b.CoverPctMean IS NULL THEN 0 ELSE b.CoverPctMean END AS CoverPctMean, 
+               b.ChkPctMean
+          FROM Cover_Tag_Indicators_Plot AS a
+          LEFT JOIN Cover_Plot AS b 
+            ON a.PlotKey = b.PlotKey AND
+               a.Season = b.Season AND
+               a.Method = b.Method AND
+               a.Duration = b.Duration AND
+               a.IndicatorCategory = b.IndicatorCategory AND
+               a.Indicator = b.Indicator AND
+               a.HitCategory = b.Hitcategory) AS x
+ GROUP BY Tag, Method, Duration, IndicatorCategory, Indicator, HitCategory
+ ORDER BY Tag, Method, Duration, IndicatorCategory, Indicator, HitCategory;
 			  
 -- View: Dimensions_Line
 /* The final Line level product for Dimension. Gets dimension information from LPI and LI penultimate products. */
 CREATE VIEW Dimensions_Line AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           Method,
-           HitCategory AS MethodCategory,
-           LineSize,
-           LineSizeUnits,
-           Duration,
-           IndicatorCategory,
-           Indicator,
-           'Height' AS Dimension,
-           HeightMean AS DimMean,
-           HeightUnits AS DimUnits
-      FROM LPI_Line_IndicatorsCalc
-     WHERE HeightMean IS NOT NULL
-    UNION
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           Method,
-           HitCategory AS MethodCategory,
-           LineSize,
-           LineSizeUnits,
-           Duration,
-           IndicatorCategory,
-           Indicator,
-           Dimension,
-           DimMean,
-           DimUnits
-      FROM LI_Line_Height
-    UNION
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           Method,
-           HitCategory AS MethodCategory,
-           LineSize,
-           LineSizeUnits,
-           Duration,
-           IndicatorCategory,
-           Indicator,
-           Dimension,
-           DimMean,
-           DimUnits
-      FROM LI_Line_Length
-     ORDER BY SiteID,
-              PLotID,
-              LineID,
-              FormDate,
-              Method,
-              MethodCategory,
-              IndicatorCategory,
-              HitCategory,
-              Dimension,
-              Indicator,
-              Duration;
+SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID, a.LineID, b.FormDate, b.Method, 
+       b.HitCategory AS MethodCategory, 
+       b.LineSize, LineSizeUnits, Duration, IndicatorCategory, Indicator, 
+       'Height' AS Dimension, 
+       b.HeightMean AS DimMean,
+       b.HeightUnits AS DimUnits
+  FROM joinSitePlotLine AS a
+ INNER JOIN LPI_Line_IndicatorsCalc AS b ON a.LineKey = b.LineKey
+ WHERE HeightMean IS NOT NULL
+
+ UNION ALL
+SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, PlotID, LineID, FormDate, Method,
+       HitCategory AS MethodCategory,
+       LineSize, LineSizeUnits, Duration, IndicatorCategory, Indicator, Dimension, DimMean, DimUnits
+  FROM LI_Line_Height
+
+ UNION ALL
+SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, PlotID, LineID, FormDate, Method,
+       HitCategory AS MethodCategory,
+       LineSize, LineSizeUnits, Duration, IndicatorCategory, Indicator, Dimension, DimMean, DimUnits
+  FROM LI_Line_Length
+ ORDER BY SiteID, PlotID, LineID, FormDate, Method, MethodCategory, IndicatorCategory, HitCategory,
+       Dimension, Indicator, Duration;
 			  
 -- View: Dimensions_Plot
 /* The final Plot level product for Dimension. Gets dimension information from LPI and LI penultimate products. Uses Seasons to delineate multiple 
@@ -792,66 +702,31 @@ CREATE VIEW LI_Line_Height AS
 /* Constructs a complete list of Line-Intercept indicators for each LI line. For use in later matching up existing data and 
 defining null data. */
 CREATE VIEW LI_Line_IndicatorsCartesian AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           a.Method,
-           a.FormDate,
-           a.SegType,
-           b.IndicatorCategory,
-           b.Duration,
-           b.Indicator
-      FROM LI_PlotsLinesForms AS a,
-           NonSpeciesIndicators AS b
-     WHERE a.Method = 'Continuous Line Intercept' AND 
-           b.IndicatorCategory <> 'Gap'
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           a.Method,
-           a.FormDate,
-           a.SegType,
-           b.IndicatorCategory,
-           b.Duration,
-           b.Indicator
-      FROM LI_PlotsLinesForms AS a,
-           NonSpeciesIndicators AS b
-     WHERE a.Method = 'Canopy Gap with Species'
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           a.Method,
-           a.FormDate,
-           a.SegType,
-           b.IndicatorCategory,
-           b.Duration,
-           b.Indicator
-      FROM LI_PlotsLinesForms AS a,
-           NonSpeciesIndicators AS b
-     WHERE a.Method = 'Gap Intercept' AND 
-           b.IndicatorCategory = 'Gap'
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              Method,
-              IndicatorCategory,
-              Indicator,
-              Duration;
+SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
+  FROM LI_PlotsLinesForms AS a,
+       NonSpeciesIndicators AS b
+ WHERE a.Method = 'Continuous Line Intercept' AND b.IndicatorCategory <> 'Gap'
+
+ UNION ALL
+SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
+  FROM LI_PlotsLinesForms AS a,
+       NonSpeciesIndicators AS b
+ WHERE a.Method = 'Canopy Gap with Species'
+
+ UNION ALL
+SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
+  FROM LI_PlotsLinesForms AS a,
+       NonSpeciesIndicators AS b
+ WHERE a.Method = 'Gap Intercept' AND b.IndicatorCategory = 'Gap'
+
+ UNION ALL
+SELECT y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator
+  FROM
+       (SELECT b.LineKey, a.Method, a.SegType, 'Species' AS IndicatorCategory, a.Duration, a.Indicator
+          FROM LI_Plot_Species AS a
+         INNER JOIN tblLines AS b ON a.PlotKey = b.PlotKey) AS x
+ INNER JOIN LI_Header_View AS y ON x.LineKey = y.LineKey AND x.Method = y.Method
+ GROUP BY y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator;
 			  
 -- View: LI_Line_Length
 /* Splits off LI Length information and formats it so it can be a precursor to the final products. */
@@ -893,425 +768,287 @@ CREATE VIEW LI_Line_Length AS
 -- View: LI_LineCalc
 /* Takes the calculated LI indicators and converts to the correct units (if necessary) and also calculates percent cover. */
 CREATE VIEW LI_LineCalc AS
-    SELECT a.LineKey,
-           b.RecKey,
-           b.Method,
+SELECT a.LineKey, b.RecKey, b.Method,
            b.SegType AS InterceptType,
            (a.LineLengthAmount * c.ConvertFactor) AS LineLengthAmount,
            d.FinalUnits AS LengthUnits,
-           b.IndicatorCategory,
-           b.Duration,
-           b.Indicator,
+           b.IndicatorCategory, b.Duration, b.Indicator,
            (b.LengthMean * d.ConvertFactor) AS LengthMean,
            (b.LengthSum * d.ConvertFactor) AS LengthSum,
-           (CAST ( (b.LengthSum * d.ConvertFactor) AS REAL) / (a.LineLengthAmount * c.ConvertFactor) ) AS PctCover,
+           (CAST ( (b.LengthSum * d.ConvertFactor) AS REAL) / 
+                 (a.LineLengthAmount * c.ConvertFactor) ) AS PctCover,
            (b.HeightMean * e.ConvertFactor) AS HeightMean,
-           e.FinalUnits AS HeightUnit,
-           b.ChkBoxMean
-      FROM LI_Header_View AS a
-           JOIN
-           LI_LineSum_Indicators AS b ON a.RecKey = b.RecKey AND 
-                                         a.Method = b.Method
-           LEFT JOIN
-           UnitConversion_Use AS c ON a.LineLengthUnit = c.Units
-           LEFT JOIN
-           UnitConversion_Use AS d ON a.SegUnit = d.Units
-           LEFT JOIN
-           UnitConversion_Use AS e ON a.HeightUnit = e.Units
-     ORDER BY a.Linekey,
-              b.RecKey,
-              b.Method,
-              b.SegType,
-              b.IndicatorCategory,
-              b.Indicator,
-              b.Duration;
+           e.FinalUnits AS HeightUnit, b.ChkBoxMean
+  FROM LI_Header_View AS a
+ INNER JOIN LI_LineSum_Indicators AS b ON a.RecKey = b.RecKey AND a.Method = b.Method
+  LEFT JOIN UnitConversion_Use AS c ON a.LineLengthUnit = c.Units
+  LEFT JOIN UnitConversion_Use AS d ON a.SegUnit = d.Units
+  LEFT JOIN UnitConversion_Use AS e ON a.HeightUnit = e.Units;
 			  
 -- View: LI_LineSum
 /* Serves as the primary calculator of final line totals/averages from raw line intercept detail data. See inside statement 
 for indivudual descriptions. */
 CREATE VIEW LI_LineSum AS
     /* Creates the non-size class gap indicator*/
-	SELECT RecKey,
-           Method,
-           SegType,
-           'Gap' AS IndicatorCategory,
-           'NA' AS Duration,
-           'Gap' AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-     WHERE Species = 'GAP'
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-	/* Creates the size class version of the Gap indicator. The CASE operator serves to contruct the indicator name from the size classes.*/
-    SELECT RecKey,
-           Method,
-           SegType,
-           'Gap' AS IndicatorCategory,
-           'NA' AS Duration,
-           ('Gap (' || b.StartLimit || CASE WHEN b.StartOperator = '>' THEN '<' ELSE '=' END || 'x' || CASE WHEN b.EndOperator IS NULL THEN '' WHEN b.EndOperator = '<' THEN '<' ELSE '=' END || CASE WHEN b.EndLimit IS NULL THEN '' ELSE b.EndLimit END || ')') AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a,
-           LI_SizeClasses AS b
-     WHERE Species = 'GAP' AND 
-           (CASE WHEN b.StartOperator = '>' THEN Abs(SegStart - SegEnd) > b.StartLimit WHEN b.StartOperator = '>=' THEN Abs(SegStart - SegEnd) >= b.StartLimit ELSE 1 END) AND 
-           (CASE WHEN b.EndOperator = '<' THEN Abs(SegStart - SegEnd) < b.EndLimit WHEN b.EndOperator = '<=' THEN Abs(SegStart - SegEnd) <= b.EndLimit ELSE 1 END) 
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-	/* Provides the species indicator. CodeTags serves as a duration converter.*/
-    SELECT RecKey,
-           Method,
-           SegType,
-           'Species' AS IndicatorCategory,
-           c.Tag AS Duration,
-           b.ScientificName AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           CodeTags AS c ON b.Duration = c.Code
-     WHERE b.ScientificName IS NOT NULL AND 
-           c.Category = 'Duration' AND 
-           c.Use = 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-    /* Provides the non-duration foliar indicator. */
-	SELECT RecKey,
-           Method,
-           SegType,
-           'Foliar' AS IndicatorCategory,
-           'All' AS Duration,
-           'Foliar' AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-     WHERE Species <> 'GAP'
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-    /* Provides the duration specific foliar indicator. CodeTags serves as a duration converter. */
-	SELECT RecKey,
-           Method,
-           SegType,
-           'Foliar' AS IndicatorCategory,
-           c.Tag AS Duration,
-           'Foliar' AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           CodeTags AS c ON b.Duration = c.Code
-     WHERE Species <> 'GAP' AND 
-           c.Category = 'Duration' AND 
-           C.Use = 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-	/* Provides the duration specific GrowthHabitSub Indicator. CodeTags used to filter and convert durations and growth habits.*/
-    SELECT RecKey,
-           Method,
-           SegType,
-           'GrowthHabit' AS IndicatorCategory,
-           e.Tag AS Duration,
-           d.Tag AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           JOIN
-           CodeTags AS e ON b.Duration = e.Code
-     WHERE Species <> 'GAP' AND 
-           d.Category = 'GrowthHabitSub' AND 
-           d.Use = 1 AND 
-           e.Category = 'Duration' AND 
-           e.Use = 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-    /* Provides the non-duration specific GrowthHabitSub Indicator. CodeTags used to filter and convert growth habits.*/
-	SELECT RecKey,
-           Method,
-           SegType,
-           'GrowthHabit' AS IndicatorCategory,
-           'All' AS Duration,
-           d.Tag AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS e ON d.Tag = e.GHTag
-     WHERE Species <> 'GAP' AND 
-           d.Category = 'GrowthHabitSub' AND 
-           d.Use = 1 AND 
-           e.GHCount > 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-    /* Provides the duration specific GrowthHabit Indicator. CodeTags used to filter and convert durations and growth habits.*/
-	SELECT RecKey,
-           Method,
-           SegType,
-           'GrowthHabit' AS IndicatorCategory,
-           e.Tag AS Duration,
-           d.Tag AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           JOIN
-           CodeTags AS e ON b.Duration = e.Code
-     WHERE Species <> 'GAP' AND 
-           d.Category = 'GrowthHabit' AND 
-           d.Use = 1 AND 
-           e.Category = 'Duration' AND 
-           e.Use = 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-	/* Provides the non-duration specific GrowthHabit Indicator. CodeTags used to filter and convert growth habits.*/
-    SELECT RecKey,
-           Method,
-           SegType,
-           'GrowthHabit' AS IndicatorCategory,
-           'All' AS Duration,
-           d.Tag AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS e ON d.Tag = e.GHTag
-     WHERE Species <> 'GAP' AND 
-           d.Category = 'GrowthHabit' AND 
-           d.Use = 1 AND 
-           e.DurationCount > 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-    /* Provides the non-duration specific Species Tag Indicator. */
-	SELECT RecKey,
-           Method,
-           SegType,
-           'Species Tag' AS IndicatorCategory,
-           'All' AS Duration,
-           c.Tag AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           SpeciesTags AS c ON b.SpeciesCode = c.SpeciesCode
-           JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS d ON c.Tag = d.SpeciesTag
-     WHERE Species <> 'GAP' AND 
-           d.DurationCount > 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Duration,
-              Indicator
-    UNION ALL
-	/* Provides the duration specific Species Tag Indicator. CodeTags used to filter and convert durations.*/
-    SELECT RecKey,
-           Method,
-           SegType,
-           'Species Tag' AS IndicatorCategory,
-           d.Tag AS Duration,
-           c.Tag AS Indicator,
-           Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-           Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-           Avg(Height) AS HeightMean,
-           Avg(ChkBox) AS ChkBoxMean
-      FROM LI_Detail_View AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           SpeciesTags AS c ON a.Species = c.SpeciesCode
-           JOIN
-           CodeTags AS d ON b.Duration = d.Code
-     WHERE Species <> 'GAP' AND 
-           d.Category = 'Duration' AND 
-           d.Use = 1
-     GROUP BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              d.Tag,
-              c.Tag
-     ORDER BY RecKey,
-              Method,
-              SegType,
-              IndicatorCategory,
-              Indicator,
-              Duration;
+SELECT RecKey, Method, SegType,
+       'Gap' AS IndicatorCategory,
+       'NA' AS Duration,
+       'Gap' AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ WHERE Species = 'GAP'
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Creates the size class version of the Gap indicator. The CASE operator serves to contruct the indicator name from the size classes.*/
+SELECT RecKey, Method, SegType,
+       'Gap' AS IndicatorCategory,
+       'NA' AS Duration,
+       ('Gap (' || b.StartOperator || b.StartLimit ||  
+             CASE WHEN EndOperator IS NULL THEN ')' 
+                  ELSE ' to ' || EndOperator || EndLimit || ')' END) AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a, LI_SizeClasses AS b
+ WHERE Species = 'GAP' AND 
+       (CASE WHEN b.StartOperator = '>' THEN Abs(SegStart - SegEnd) > b.StartLimit 
+             WHEN b.StartOperator = '>=' THEN Abs(SegStart - SegEnd) >= b.StartLimit 
+             ELSE 1 END) AND 
+       (CASE WHEN b.EndOperator = '<' THEN Abs(SegStart - SegEnd) < b.EndLimit 
+             WHEN b.EndOperator = '<=' THEN Abs(SegStart - SegEnd) <= b.EndLimit ELSE 1 END) 
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the species indicator. CodeTags serves as a duration converter.*/
+SELECT RecKey, Method, SegType,
+       'Species' AS IndicatorCategory,
+       CASE WHEN b.Duration IS NULL THEN 'NA' ELSE b.Duration END AS Duration,
+       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND 
+                 (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
+            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
+            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
+            ELSE b.ScientificName END AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE b.SpeciesCode IS NOT NULL
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the non-duration foliar indicator. */
+SELECT RecKey, Method, SegType,
+       'Foliar' AS IndicatorCategory,
+       'All' AS Duration,
+       'Foliar' AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ WHERE Species <> 'GAP'
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the duration specific foliar indicator. CodeTags serves as a duration converter. */
+SELECT RecKey, Method, SegType,
+       'Foliar' AS IndicatorCategory,
+       c.Tag AS Duration,
+       'Foliar' AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN CodeTags AS c ON b.Duration = c.Code
+ WHERE Species <> 'GAP' AND 
+       c.Category = 'Duration' AND 
+       c.Use = 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the duration specific GrowthHabitSub Indicator (Growth Habit). CodeTags used to filter and convert durations and growth habits.*/
+SELECT RecKey, Method, SegType,
+       'GrowthHabit' AS IndicatorCategory,
+       e.Tag AS Duration, d.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+ INNER JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+ INNER JOIN CodeTags AS e ON b.Duration = e.Code
+ WHERE Species <> 'GAP' AND 
+       d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.Category = 'Duration' AND 
+       e.Use = 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the non-duration specific GrowthHabitSub Indicator (Growth Habit). CodeTags used to filter and convert growth habits.*/
+SELECT RecKey, Method, SegType,
+       'GrowthHabit' AS IndicatorCategory,
+       'All' AS Duration,
+       d.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+ INNER JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON d.Tag = e.GHTag
+ WHERE Species <> 'GAP' AND 
+       d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.GHCount > 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the duration specific GrowthHabit Indicator (Lignification). CodeTags used to filter and convert durations and growth habits.*/
+SELECT RecKey, Method, SegType, IndicatorCategory, Duration, Indicator,
+       Avg(length) AS LengthMean,
+       Sum(length) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM 
+       (SELECT a.RecKey, a.Method, a.SegType,
+               'Lignification' AS IndicatorCategory,
+               e.Tag AS Duration, d.Tag AS Indicator,
+               Abs(a.SegStart - a.SegEnd) AS length,
+               a.Height, a.ChkBox
+          FROM LI_Detail_View AS a
+         INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+          LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+         INNER JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+         INNER JOIN CodeTags AS e ON b.Duration = e.Code
+         WHERE a.Species <> 'GAP' AND 
+               d.Category = 'GrowthHabit' AND 
+               d.Use = 1 AND 
+               e.Category = 'Duration' AND 
+               e.Use = 1)
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the non-duration specific GrowthHabit Indicator (Lignification). CodeTags used to filter and convert growth habits.*/
+SELECT RecKey, Method, SegType, IndicatorCategory, Duration, Indicator,
+       Avg(length) AS LengthMean,
+       Sum(length) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM 
+       (SELECT a.RecKey, a.Method, a.SegType,
+               'Lignification' AS IndicatorCategory,
+               'All' AS Duration,
+               d.Tag AS Indicator,
+               SegStart, SegEnd, Height, ChkBox,
+               Abs(SegStart - SegEnd) AS length
+          FROM LI_Detail_View AS a
+         INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+          LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+         INNER JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+         INNER JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON d.Tag = e.GHTag
+         WHERE a.Species <> 'GAP' AND 
+               d.Category = 'GrowthHabit' AND 
+               d.Use = 1 AND 
+               e.DurationCount > 1)
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the non-duration specific Species Tag Indicator. */
+SELECT RecKey, Method, SegType,
+       'Species Tag' AS IndicatorCategory,
+       'All' AS Duration,
+       c.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON b.SpeciesCode = c.SpeciesCode
+ INNER JOIN Duration_SpeciesTags_Combinations_Use_Count AS d ON c.Tag = d.SpeciesTag
+ WHERE Species <> 'GAP' AND d.DurationCount > 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+
+ UNION ALL
+/* Provides the duration specific Species Tag Indicator. CodeTags used to filter and convert durations.*/
+SELECT RecKey, Method, SegType,
+       'Species Tag' AS IndicatorCategory,
+       d.Tag AS Duration, c.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
+ INNER JOIN CodeTags AS d ON b.Duration = d.Code
+ WHERE Species <> 'GAP' AND 
+       d.Category = 'Duration' AND 
+       d.Use = 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, d.Tag, c.Tag;
 			  
 -- View: LI_LineSum_Indicators
 /* Joins full indicator list for LI with existing Line data. Replaces NULL Lengths with zeros. */
 CREATE VIEW LI_LineSum_Indicators AS
-    SELECT a.RecKey,
-           a.Method,
-           a.IndicatorCategory,
-           a.Duration,
-           a.Indicator,
-           a.SegType,
-           CASE WHEN b.LengthMean IS NULL THEN 0 ELSE b.LengthMean END AS LengthMean,
-           CASE WHEN b.LengthSum IS NULL THEN 0 ELSE b.LengthSum END AS LengthSum,
-           b.HeightMean,
-           b.ChkBoxMean
-      FROM LI_Line_IndicatorsCartesian AS a
-           LEFT JOIN
-           LI_LineSum AS b ON a.RecKey = b.RecKey AND 
+SELECT a.RecKey, a.Method, a.IndicatorCategory, a.Duration, a.Indicator, a.SegType,
+       CASE WHEN b.LengthMean IS NULL THEN 0 
+            ELSE b.LengthMean END AS LengthMean,
+       CASE WHEN b.LengthSum IS NULL THEN 0 
+            ELSE b.LengthSum END AS LengthSum,
+       b.HeightMean,
+       b.ChkBoxMean
+  FROM LI_Line_IndicatorsCartesian AS a
+  LEFT JOIN LI_LineSum AS b ON a.RecKey = b.RecKey AND 
+                              a.Method = b.Method AND
                               a.IndicatorCategory = b.IndicatorCategory AND 
                               a.Duration = b.Duration AND 
                               a.Indicator = b.Indicator AND 
-                              a.SegType = b.SegType
-     ORDER BY a.RecKey,
-              a.Method,
-              a.SegType,
-              a.IndicatorCategory,
-              a.Indicator,
-              a.Duration;
+                              a.SegType = b.SegType;
 			  
 -- View: LI_Plot_Species
 -- UNUSED
 /* Creates a list of species used by each plot where LI is used. */
 CREATE VIEW LI_Plot_Species AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.SiteID,
-           a.PlotID,
-           d.ScientificName
-      FROM joinSitePlotLine AS a
-           JOIN
-           LI_Header_View AS b ON a.LineKey = b.LineKey
-           JOIN
-           LI_Detail_View AS c ON b.RecKey = c.RecKey
-           JOIN
-           tblSpecies AS d ON c.Species = d.SpeciesCode
-     WHERE d.ScientificName IS NOT NULL
-     GROUP BY a.SiteKey,
-              a.PlotKey,
-              d.ScientificName
-     ORDER BY a.SiteID,
-              a.PlotID,
-              d.ScientificName;
+SELECT a.PlotKey, b.Method, c.SegType,
+       CASE WHEN d.Duration IS NULL THEN 'NA' ELSE d.Duration END AS Duration,
+       CASE WHEN d.CodeType = 'generic' THEN 'Unidentified ' || d.ScientificName || ' (' || d.SpeciesCode || ')' 
+            WHEN (d.ScientificName IS NULL OR d.ScientificName = '') AND (d.CommonName IS NULL OR d.CommonName = '') THEN d.SpeciesCode 
+            WHEN (d.ScientificName IS NULL OR d.ScientificName = '') THEN d.CommonName 
+            WHEN d.CodeType = 'family' THEN d.Family || ' genus sp.' 
+            WHEN d.CodeType = 'genus' THEN d.ScientificName || ' sp.' 
+            ELSE d.ScientificName END AS Indicator
+  FROM tblLines AS a
+ INNER JOIN LI_Header_View AS b ON a.LineKey = b.LineKey
+ INNER JOIN LI_Detail_View AS c ON b.RecKey = c.RecKey AND b.Method = c.Method
+ INNER JOIN tblSpecies AS d ON c.Species = d.SpeciesCode
+ WHERE d.SpeciesCode IS NOT NULL
+ GROUP BY a.PlotKey, b.Method, Indicator;
 			  
 -- View: LI_PlotsLinesForms
 /* Used as a precursor to construct an full indicator list for each line for Line Intercept methods. */
 CREATE VIEW LI_PlotsLinesForms AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.Method,
-           b.FormDate,
-           c.SegType
-      FROM joinSitePlotLine AS a
-           JOIN
-           LI_Header_View AS b ON a.LineKey = b.LineKey
-           JOIN
-           LI_Detail_View AS c ON b.RecKey = c.RecKey
-     GROUP BY a.SiteKey,
-              a.PlotKey,
-              a.LineKey,
-              b.RecKey,
-              c.SegType
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              b.Method,
-              FormDate,
-              SegType;
+SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID,  a.LineID,
+       b.Method, b.FormDate, c.SegType
+  FROM joinSitePlotLine AS a
+ INNER JOIN LI_Header_View AS b ON a.LineKey = b.LineKey
+ INNER JOIN LI_Detail_View AS c ON b.RecKey = c.RecKey
+ GROUP BY a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, b.Method, c.SegType;
 			  
 -- View: LI_Raw_Final
 /* Constructs a recordset for the Line Intercept raw data report. */
@@ -1378,494 +1115,114 @@ CREATE VIEW Line_Definition AS
 /* Serves to define what consitutes Cover, Bare, and Bare Litter cover types. Used to delineate surface categories in 
 LPI_CanopyLayers_Point_SoilSurface_CvrCat */
 CREATE VIEW LPI_CanopyDefinitions AS
-    SELECT *,
-           CASE WHEN instr(CategoryConcat, 'Top') != 0 THEN 'Cover' WHEN (instr(CategoryConcat, 'Top') = 0 AND 
-                                                                          instr(CategoryConcat, 'Lower') != 0) THEN 'Bare Litter' ELSE 'Bare' END AS CvrCat
-      FROM LPI_CanopyDefinitions_CategoryConcat
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr;
+SELECT *,
+       CASE WHEN instr(CategoryConcat, 'Top') != 0 THEN 'Cover' 
+            WHEN (instr(CategoryConcat, 'Top') = 0 AND instr(CategoryConcat, 'Lower') != 0) THEN 'Bare Litter' 
+            ELSE 'Bare' END AS CvrCat
+  FROM LPI_CanopyDefinitions_CategoryConcat;
 			  
 -- View: LPI_CanopyDefinitions_CategoryConcat
 /* Essentially concats the existing LPI canopy layers from the raw LPI.  Provides a quick way of determining what data was found 
 at each point and serves as a precursor to LPI_CanopyDefinitions */
 CREATE VIEW LPI_CanopyDefinitions_CategoryConcat AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           group_concat(Category, ';') AS CategoryConcat
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates
-     GROUP BY RecKey,
-              PointNbr
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr;
+SELECT RecKey, PointNbr,
+       group_concat(Category, ';') AS CategoryConcat
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates
+ GROUP BY RecKey, PointNbr;
 			  
 -- View: LPI_CanopyLayers_Point_DB_RestrictDates
 /* Restricts LPI data by the allowed date range */
 CREATE VIEW LPI_CanopyLayers_Point_DB_RestrictDates AS
-    SELECT *
-      FROM LPI_CanopyLayers_Point_DB_UNION
-     WHERE FormDate BETWEEN (
-                                SELECT StartDate
-                                  FROM Data_DateRange
-                                 WHERE rowid = 1
-                            )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Rank;
-			  
--- View: LPI_CanopyLayers_Point_DB_UNION
-/* Translates tblLPIDetail into a single record per canopy layer style and joins it to the header/line/plot tables.
-This facilitates parsing out data by canopy layer which is central to most LPI processing. Each layer is separated and then
-UNIONED with other layers. The GLOB function serves as a way to weed out non-numeric Height entries, replacing them with NULL.
-Also these individial SELECT statements convert height to the the units selected in the Data_DBconfig table via the 
-UnitConversion_Use view. */
-CREATE VIEW LPI_CanopyLayers_Point_DB_UNION AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN TopCanopy IN ('None', '') THEN NULL ELSE TopCanopy END AS Species,
-           ChkBoxTop AS ChkBox,
-		   CASE WHEN (HeightTop GLOB '*[A-z]*' OR 
-                      HeightTop = '') THEN NULL ELSE (HeightTop * ConvertFactor) END AS Height, 
-           'Top' AS Category,
-           0 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower1 IN ('None', '') THEN NULL ELSE Lower1 END AS Species,
-           ChkBoxLower1 AS ChkBox,
-           CASE WHEN (HeightLower1 GLOB '*[A-z]*' OR 
-                      HeightLower1 = '') THEN NULL ELSE (HeightLower1 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           1 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower2 IN ('None', '') THEN NULL ELSE Lower2 END AS Species,
-           ChkBoxLower2 AS ChkBox,
-           CASE WHEN (HeightLower2 GLOB '*[A-z]*' OR 
-                      HeightLower2 = '') THEN NULL ELSE (HeightLower2 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           2 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower3 IN ('None', '') THEN NULL ELSE Lower3 END AS Species,
-           ChkBoxLower3 AS ChkBox,
-           CASE WHEN (HeightLower3 GLOB '*[A-z]*' OR 
-                      HeightLower3 = '') THEN NULL ELSE (HeightLower3 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           3 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower4 IN ('None', '') THEN NULL ELSE Lower4 END AS Species,
-           ChkBoxLower4 AS ChkBox,
-           CASE WHEN (HeightLower4 GLOB '*[A-z]*' OR 
-                      HeightLower4 = '') THEN NULL ELSE (HeightLower4 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           4 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower5 IN ('None', '') THEN NULL ELSE Lower5 END AS Species,
-           ChkBoxLower5 AS ChkBox,
-           CASE WHEN (HeightLower5 GLOB '*[A-z]*' OR 
-                      HeightLower5 = '') THEN NULL ELSE (HeightLower5 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           5 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower6 IN ('None', '') THEN NULL ELSE Lower6 END AS Species,
-           ChkBoxLower6 AS ChkBox,
-           CASE WHEN (HeightLower6 GLOB '*[A-z]*' OR 
-                      HeightLower6 = '') THEN NULL ELSE (HeightLower6 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           6 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN Lower7 IN ('None', '') THEN NULL ELSE Lower7 END AS Species,
-           ChkBoxLower7 AS ChkBox,
-           CASE WHEN (HeightLower7 GLOB '*[A-z]*' OR 
-                      HeightLower7 = '') THEN NULL ELSE (HeightLower7 * ConvertFactor) END AS Height,
-           'Lower' AS Category,
-           7 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN SoilSurface IN ('None', '') THEN NULL ELSE SoilSurface END AS Species,
-           ChkBoxSoil AS ChkBox,
-           CASE WHEN (HeightSurface GLOB '*[A-z]*' OR 
-                      HeightSurface = '') THEN NULL ELSE (HeightSurface * ConvertFactor) END AS Height,
-           'Surface' AS Category,
-           8 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN SpeciesWoody IN ('None', '') THEN NULL ELSE SpeciesWoody END AS Species,
-           NULL AS ChkBox,
-           CASE WHEN (HeightWoody GLOB '*[A-z]*' OR 
-                      HeightWoody = '') THEN NULL ELSE (HeightWoody * ConvertFactor) END AS Height,
-           'HeightWoody' AS Category,
-           9 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-    UNION ALL
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           PointNbr,
-           CASE WHEN SpeciesHerbaceous IN ('None', '') THEN NULL ELSE SpeciesHerbaceous END AS Species,
-           NULL AS ChkBox,
-           CASE WHEN (HeightHerbaceous GLOB '*[A-z]*' OR 
-                      HeightHerbaceous = '') THEN NULL ELSE (HeightHerbaceous * ConvertFactor) END AS Height,
-           'HeightHerbaceous' AS Category,
-           10 AS Rank
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-           JOIN
-           UnitConversion_Use AS d ON b.HeightUOM = d.Units
-     WHERE Coalesce(Species, Height) IS NOT NULL
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Rank;
-			  
+SELECT a.*
+  FROM lpi_detail AS a
+ INNER JOIN tblLPIHeader AS b ON a.RecKey = b. RecKey
+ WHERE b.FormDate BETWEEN 
+         (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND
+         (SELECT EndDate FROM Data_DateRange WHERE rowid = 1);
+			  			  
 -- View: LPI_CanopyLayers_Point_Duration_Foliar
 /* Creates record set that shows whether each LPI point has or doesn't have foliar cover at it for each specific Duration. 
 Uses the CodeTags table to define and convert durations (i.e. annual duration may become annual_biennial if set up that way 
 in CodeTags). Each UNION provides a different Hit Category (First, Any, Basal, Height). See additional comments inside 
 statement. */
 CREATE VIEW LPI_CanopyLayers_Point_Duration_Foliar AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           c.Tag AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON b.SpeciesCode = a.Species
-           LEFT JOIN
-           CodeTags AS c ON b.Duration = c.Code
-     WHERE b.SpeciesCode IS NOT NULL AND 
-           c.Category = 'Duration' AND 
-           c.Use = 1 AND 
-           a.Category IN ('Top', 'Lower', 'Surface') 
-     GROUP BY RecKey,
-              PointNbr,
-              c.Tag,
-              Indicator
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           c.Tag AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON b.SpeciesCode = a.Species
-           LEFT JOIN
-           CodeTags AS c ON b.Duration = c.Code
-     WHERE b.SpeciesCode IS NOT NULL AND 
-           c.Category = 'Duration' AND 
-           c.Use = 1 AND 
-           a.Category = 'Top'
-     GROUP BY RecKey,
-              PointNbr,
-              c.Tag,
-              Indicator
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           c.Tag AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON b.SpeciesCode = a.Species
-           LEFT JOIN
-           CodeTags AS c ON b.Duration = c.Code
-     WHERE b.SpeciesCode IS NOT NULL AND 
-           c.Category = 'Duration' AND 
-           c.Use = 1 AND 
-           a.Category = 'Surface'
-     GROUP BY RecKey,
-              PointNbr,
-              c.Tag,
-              Indicator
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           c.Tag AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON b.SpeciesCode = a.Species
-           LEFT JOIN
-           CodeTags AS c ON b.Duration = c.Code
-     WHERE b.SpeciesCode IS NOT NULL AND 
-           c.Category = 'Duration' AND 
-           c.Use = 1 AND 
-           a.Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY RecKey,
-              PointNbr,
-              c.Tag,
-              Indicator
-    UNION ALL
-    /* This statement is used to add instances of NULL species where there is a Woody Height, thus an implied perennial 
-	for the height. A similar statement for an Herbaceous Height field is not given due to the unknown duration of 
-	herbaceous hits (and this is a duration specific constructor). */
-	SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'Perennial' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           NULL AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates
-     WHERE Category IN ('HeightWoody') AND 
-           Species IS NULL AND 
-           Height > 0
-     GROUP BY RecKey,
-              PointNbr,
-              Duration,
-              Indicator
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Duration,
-              Indicator,
-              HitCategory;
+SELECT RecKey, PointNbr, c.Tag AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON b.SpeciesCode = a.Species
+  LEFT JOIN CodeTags AS c ON b.Duration = c.Code
+ WHERE b.SpeciesCode IS NOT NULL AND 
+       c.Category = 'Duration' AND 
+       c.Use = 1 AND 
+       a.Category IN ('Top', 'Lower', 'Surface') 
+ GROUP BY RecKey, PointNbr, c.Tag, Indicator
+
+ UNION ALL
+SELECT RecKey, PointNbr, c.Tag AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON b.SpeciesCode = a.Species
+  LEFT JOIN CodeTags AS c ON b.Duration = c.Code
+ WHERE b.SpeciesCode IS NOT NULL AND 
+       c.Category = 'Duration' AND 
+       c.Use = 1 AND 
+       a.Category = 'Top'
+ GROUP BY RecKey, PointNbr, c.Tag, Indicator
+
+ UNION ALL
+SELECT RecKey, PointNbr, c.Tag AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON b.SpeciesCode = a.Species
+  LEFT JOIN CodeTags AS c ON b.Duration = c.Code
+ WHERE b.SpeciesCode IS NOT NULL AND 
+       c.Category = 'Duration' AND 
+       c.Use = 1 AND 
+       a.Category = 'Surface'
+ GROUP BY RecKey, PointNbr, c.Tag, Indicator
+
+ UNION ALL
+SELECT RecKey, PointNbr, c.Tag AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON b.SpeciesCode = a.Species
+  LEFT JOIN CodeTags AS c ON b.Duration = c.Code
+ WHERE b.SpeciesCode IS NOT NULL AND 
+       c.Category = 'Duration' AND 
+       c.Use = 1 AND 
+       a.Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY RecKey, PointNbr, c.Tag, Indicator
+
+ UNION ALL
+/* This statement is used to add instances of NULL species where there is a Woody Height, thus an implied perennial for the height. A similar statement for an Herbaceous Height field is not given due to the unknown duration of herbaceous hits (and this is a duration specific constructor). */
+SELECT RecKey, PointNbr,
+       'Perennial' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       NULL AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates
+ WHERE Category IN ('HeightWoody') AND 
+       Species IS NULL AND 
+       Height > 0
+ GROUP BY RecKey, PointNbr, Duration, Indicator;
 			  
 -- View: LPI_CanopyLayers_Point_Duration_GrowthHabit
 /* Serves to define whether each LPI point has GrowthHabit hit on it for a particular duration (i.e. woody vs non-woody). 
@@ -1877,178 +1234,95 @@ to more clearly differentiate the results from the GrowthHabitSub category (Grow
 Growth Habit).  Each UNIONED statement provides a separate Hit Category (Any, First, Basal, Height). See inside statement 
 for further comment. */
 CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabit AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Lignification' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                         e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabit' AND 
-           e.Category = 'Duration' AND 
-           a.Category IN ('Top', 'Lower', 'Surface') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Lignification' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                         e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabit' AND 
-           e.Category = 'Duration' AND 
-           a.Category = 'Top'
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Lignification' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                         e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabit' AND 
-           e.Category = 'Duration' AND 
-           a.Category = 'Surface'
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Lignification' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                         e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabit' AND 
-           e.Category = 'Duration' AND 
-           a.Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-	/* Serves as a way to include null species records with a valid woody height entry. Herbaceous not included due to lack 
-	of implied duration information for herbaceous (this is a duration specific query). */
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'Perennial' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           'Woody' AS Indicator,
-           NULL AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates
-     WHERE Category IN ('HeightWoody') AND 
-           Species IS NULL AND 
-           Height > 0
-     GROUP BY RecKey,
-              PointNbr,
-              Indicator
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              Duration,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Lignification' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabit' AND 
+       e.Category = 'Duration' AND 
+       a.Category IN ('Top', 'Lower', 'Surface') 
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Lignification' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabit' AND 
+       e.Category = 'Duration' AND 
+       a.Category = 'Top'
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Lignification' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabit' AND 
+       e.Category = 'Duration' AND 
+       a.Category = 'Surface'
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Lignification' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabit_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabit' AND 
+       e.Category = 'Duration' AND 
+       a.Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+/* Serves as a way to include null species records with a valid woody height entry. Herbaceous not included due to lack of implied duration information for herbaceous (this is a duration specific query). */
+SELECT RecKey, PointNbr,
+       'Perennial' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       'Woody' AS Indicator,
+       NULL AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates
+ WHERE Category IN ('HeightWoody') AND 
+       Species IS NULL AND 
+       Height > 0
+ GROUP BY RecKey, PointNbr, Indicator;
 			  
 -- View: LPI_CanopyLayers_Point_Duration_GrowthHabitSub
 /* Serves to define whether each LPI point has GrowthHabitSub hit on it for a particular duration (i.e. forb, graminoid, etc.). 
@@ -2059,153 +1333,83 @@ Also uses the Duration_GrowthHabitSub_Combinations_Use view to define desired Gr
 to more clearly differentiate the results from the GrowthHabit category (GrowthHabit -> Lignification and GrowthHabitSub -> 
 Growth Habit). Each UNIONED statement provides a separate Hit Category (Any, First, Basal, Height). */
 CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabitSub AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                            e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabitSub' AND 
-           e.Category = 'Duration' AND 
-           a.Category IN ('Top', 'Lower', 'Surface') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                            e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabitSub' AND 
-           e.Category = 'Duration' AND 
-           a.Category = 'Top'
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                            e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabitSub' AND 
-           e.Category = 'Duration' AND 
-           a.Category = 'Surface'
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           e.Tag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           d.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           CodeTags AS e ON b.Duration = e.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND 
-                                                            e.Tag = f.DurationTag
-     WHERE d.Category = 'GrowthHabitSub' AND 
-           e.Category = 'Duration' AND 
-           a.Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              e.Tag,
-              d.Tag
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              Duration,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabitSub' AND 
+       e.Category = 'Duration' AND 
+       a.Category IN ('Top', 'Lower', 'Surface') 
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabitSub' AND 
+       e.Category = 'Duration' AND 
+       a.Category = 'Top'
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabitSub' AND 
+       e.Category = 'Duration' AND 
+       a.Category = 'Surface'
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       e.Tag AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       d.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN CodeTags AS e ON b.Duration = e.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use AS f ON d.Tag = f.GHTag AND e.Tag = f.DurationTag
+ WHERE d.Category = 'GrowthHabitSub' AND 
+       e.Category = 'Duration' AND 
+       a.Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY a.RecKey, a.PointNbr, e.Tag, d.Tag;
 			  
 -- View: LPI_CanopyLayers_Point_Duration_SpeciesTags
 /* Serves to define whether each LPI point has Species Tag hit on it for a particular duration (defined in the SpeciesTags table). 
@@ -2214,278 +1418,149 @@ in CodeTags). Also uses the Duration_SpeciesTags_Combinations_Use view to define
 (See Duration_SpeciesTags_Combinations_Use for more information). Each UNIONED statement provides a separate Hit Category 
 (Any, First, Basal, Height). */
 CREATE VIEW LPI_CanopyLayers_Point_Duration_SpeciesTags AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           d.Tag AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           c.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           SpeciesTags AS c ON a.Species = c.SpeciesCode
-           JOIN
-           CodeTags AS d ON b.Duration = d.Code
-           JOIN
-           Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND 
-                                                         c.Tag = e.SpeciesTag
-     WHERE a.Category IN ('Top', 'Lower', 'Surface') 
-     GROUP BY RecKey,
-              PointNbr,
-              d.Tag,
-              c.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           d.Tag AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           c.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           SpeciesTags AS c ON a.Species = c.SpeciesCode
-           JOIN
-           CodeTags AS d ON b.Duration = d.Code
-           JOIN
-           Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND 
-                                                         c.Tag = e.SpeciesTag
-     WHERE a.Category = 'Top'
-     GROUP BY RecKey,
-              PointNbr,
-              d.Tag,
-              c.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           d.Tag AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           c.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           SpeciesTags AS c ON a.Species = c.SpeciesCode
-           JOIN
-           CodeTags AS d ON b.Duration = d.Code
-           JOIN
-           Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND 
-                                                         c.Tag = e.SpeciesTag
-     WHERE a.Category = 'Surface'
-     GROUP BY RecKey,
-              PointNbr,
-              d.Tag,
-              c.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           d.Tag AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           c.Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           JOIN
-           SpeciesTags AS c ON a.Species = c.SpeciesCode
-           JOIN
-           CodeTags AS d ON b.Duration = d.Code
-           JOIN
-           Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND 
-                                                         c.Tag = e.SpeciesTag
-     WHERE a.Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY RecKey,
-              PointNbr,
-              d.Tag,
-              c.Tag
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              Duration,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       d.Tag AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       c.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
+ INNER JOIN CodeTags AS d ON b.Duration = d.Code
+ INNER JOIN Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND c.Tag = e.SpeciesTag
+ WHERE a.Category IN ('Top', 'Lower', 'Surface') 
+ GROUP BY RecKey, PointNbr, d.Tag, c.Tag
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       d.Tag AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       c.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
+ INNER JOIN CodeTags AS d ON b.Duration = d.Code
+ INNER JOIN Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND c.Tag = e.SpeciesTag
+ WHERE a.Category = 'Top'
+ GROUP BY RecKey, PointNbr, d.Tag, c.Tag
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       d.Tag AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       c.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
+ INNER JOIN CodeTags AS d ON b.Duration = d.Code
+ INNER JOIN Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND c.Tag = e.SpeciesTag
+ WHERE a.Category = 'Surface'
+ GROUP BY RecKey, PointNbr, d.Tag, c.Tag
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       d.Tag AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       c.Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
+ INNER JOIN CodeTags AS d ON b.Duration = d.Code
+ INNER JOIN Duration_SpeciesTags_Combinations_Use AS e ON d.Tag = e.DurationTag AND c.Tag = e.SpeciesTag
+ WHERE a.Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY RecKey, PointNbr, d.Tag, c.Tag;
 			  
 -- View: LPI_CanopyLayers_Point_Foliar
 /* Serves to define whether each LPI point has foliar cover at it (non-duration specific). Each UNION provides a different 
 Hit Category (First, Any, Basal, Height). See additional comments inside statement. */
 CREATE VIEW LPI_CanopyLayers_Point_Foliar AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE Category IN ('Top', 'Lower', 'Surface') AND 
-           b.SpeciesCode IS NOT NULL
-     GROUP BY RecKey,
-              PointNbr,
-              Indicator,
-              HitCategory
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           ChkBox,
-           Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE Category = 'Top' AND 
-           b.SpeciesCode IS NOT NULL
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           ChkBox,
-           Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE Category = 'Surface' AND 
-           b.SpeciesCode IS NOT NULL
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY RecKey,
-              PointNbr,
-              Indicator,
-              HitCategory
-    HAVING Height <> 0
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE Category IN ('Top', 'Lower', 'Surface') AND 
+       b.SpeciesCode IS NOT NULL
+ GROUP BY RecKey, PointNbr, Indicator, HitCategory
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       ChkBox,
+       Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE Category = 'Top' AND b.SpeciesCode IS NOT NULL
+
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       ChkBox, Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE Category = 'Surface' AND b.SpeciesCode IS NOT NULL
+ 
+ UNION ALL
+
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY RecKey, PointNbr, Indicator, HitCategory
+HAVING Height <> 0;
 			  
 -- View: LPI_CanopyLayers_Point_GroundCover
 /* Serves to define whether each LPI point has ground cover at it. Uses the CodeTags table to define what non-species codes
 constitute ground cover and includes any point with a valid species hit (in tblSpecies) also as ground cover. */
 CREATE VIEW LPI_CanopyLayers_Point_GroundCover AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'NA' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Ground Cover' AS Indicator,
-           NULL AS ChkBox,
-           NULL AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           CodeTags AS b ON a.Species = b.Code
-           LEFT JOIN
-           tblSpecies AS c ON a.Species = c.SpeciesCode
-     WHERE a.Category IN ('Lower', 'Surface') AND 
-           (b.Category = 'Ground Cover' OR 
-            (c.SpeciesCode IS NOT NULL AND 
-             a.Category = 'Surface') ) AND 
-           b.Use = 1
-     GROUP BY RecKey,
-              PointNbr,
-              Indicator
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr;
+SELECT RecKey, PointNbr,
+       'NA' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Ground Cover' AS Indicator,
+       NULL AS ChkBox,
+       NULL AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN CodeTags AS b ON a.Species = b.Code
+  LEFT JOIN tblSpecies AS c ON a.Species = c.SpeciesCode
+ WHERE a.Category IN ('Lower', 'Surface') AND 
+       (b.Category = 'Ground Cover' OR 
+       (c.SpeciesCode IS NOT NULL AND 
+       a.Category = 'Surface') ) AND 
+       b.Use = 1
+ GROUP BY RecKey, PointNbr, Indicator;
 			  
 -- View: LPI_CanopyLayers_Point_GrowthHabit
 /* Serves to define whether each LPI point has GrowthHabit hit (i.e. woody vs non-woody). Not duration specific.  
@@ -2497,166 +1572,95 @@ the 'Lignification' IndicatorCategory to more clearly differentiate the results 
 (GrowthHabit -> Lignification and GrowthHabitSub -> Growth Habit).  Each UNIONED statement provides a separate Hit Category 
 (Any, First, Basal, Height). See inside statement for further comment. */
 CREATE VIEW LPI_CanopyLayers_Point_GrowthHabit AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE d.Category = 'GrowthHabit' AND 
-           d.Use = 1 AND 
-           e.DurationCount > 1 AND 
-           a.Category IN ('Top', 'Lower', 'Surface') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE d.Category = 'GrowthHabit' AND 
-           d.Use = 1 AND 
-           e.DurationCount > 1 AND 
-           a.Category = 'Top'
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE d.Category = 'GrowthHabit' AND 
-           d.Use = 1 AND 
-           e.DurationCount > 1 AND 
-           a.Category = 'Surface'
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabit = d.Code
-           LEFT JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE d.Category = 'GrowthHabit' AND 
-           d.Use = 1 AND 
-           e.DurationCount > 1 AND 
-           a.Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    /* This statement adds points that have a null species and a non-null, non-zero herbaceous heights to the non-woody 
-	indicator.  This is similar to how the duration specific version of this view does so for woody (non-woody is not duration 
-	specific while woody is implied as perennial). */
-	SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           'Non-woody' AS Indicator,
-           NULL AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates
-     WHERE Category IN ('HeightHerbaceous') AND 
-           Species IS NULL AND 
-           Height > 0
-     GROUP BY RecKey,
-              PointNbr,
-              Indicator
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE d.Category = 'GrowthHabit' AND 
+       d.Use = 1 AND 
+       e.DurationCount > 1 AND 
+       a.Category IN ('Top', 'Lower', 'Surface') 
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+
+UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE d.Category = 'GrowthHabit' AND 
+       d.Use = 1 AND 
+       e.DurationCount > 1 AND 
+       a.Category = 'Top'
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+
+UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE d.Category = 'GrowthHabit' AND 
+       d.Use = 1 AND 
+       e.DurationCount > 1 AND 
+       a.Category = 'Surface'
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+ 
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+  LEFT JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE d.Category = 'GrowthHabit' AND 
+       d.Use = 1 AND 
+       e.DurationCount > 1 AND 
+       a.Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+
+ UNION ALL
+/* This statement adds points that have a null species and a non-null, non-zero herbaceous heights to the non-woody indicator. This is similar to how the duration specific version of this view does so for woody (non-woody is not duration specific while woody is implied as perennial). */
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       'Non-woody' AS Indicator,
+       NULL AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates
+ WHERE Category IN ('HeightHerbaceous') AND 
+       Species IS NULL AND 
+       Height > 0
+ GROUP BY RecKey, PointNbr, Indicator;
 			  
 -- View: LPI_CanopyLayers_Point_GrowthHabitSub
 /* Serves to define whether each LPI point has GrowthHabitSub hit (i.e. forb, shrub, etc.) Not duration specific.  
@@ -2669,370 +1673,220 @@ GrowthHabit category (GrowthHabit -> Lignification and GrowthHabitSub -> Growth 
 Hit Category (Any, First, Basal, Height). See inside statement 
 for further comment. */
 CREATE VIEW LPI_CanopyLayers_Point_GrowthHabitSub AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE d.Category = 'GrowthHabitSub' AND 
-           d.Use = 1 AND 
-           e.GHCount > 1 AND 
-           a.Category IN ('Top', 'Lower', 'Surface') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE a.Category = 'Top' AND 
-           d.Category = 'GrowthHabitSub' AND 
-           d.Use = 1 AND 
-           e.GHCount > 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE a.Category = 'Surface' AND 
-           d.Category = 'GrowthHabitSub' AND 
-           d.Use = 1 AND 
-           e.GHCount > 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-           LEFT JOIN
-           CodeTags AS d ON c.GrowthHabitSub = d.Code
-           LEFT JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
-     WHERE d.Category = 'GrowthHabitSub' AND 
-           d.Use = 1 AND 
-           e.GHCount > 1 AND 
-           a.Category IN ('HeightWoody', 'HeightHerbaceous') 
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              d.Tag
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.GHCount > 1 AND 
+       a.Category IN ('Top', 'Lower', 'Surface') 
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE a.Category = 'Top' AND 
+       d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.GHCount > 1
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE a.Category = 'Surface' AND 
+       d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.GHCount > 1
+ GROUP BY a.RecKey, a.PointNbr, d.Tag
+ 
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+  LEFT JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+  LEFT JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON e.GHTag = d.Tag
+ WHERE d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.GHCount > 1 AND 
+       a.Category IN ('HeightWoody', 'HeightHerbaceous') 
+ GROUP BY a.RecKey, a.PointNbr, d.Tag;
 			  
 -- View: LPI_CanopyLayers_Point_Litter
 /* Gives information on whether Litter occurs at each LPI point.  Uses the CodeTags table to define what 'Litter' is.*/
 CREATE VIEW LPI_CanopyLayers_Point_Litter AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'NA' AS Duration,
-           'Litter' AS IndicatorCategory,
-           Tag AS Indicator,
-           NULL AS ChkBox,
-           NULL AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           CodeTags AS b ON a.Species = b.Code
-     WHERE a.Category = 'Lower' AND 
-           b.Category = 'Litter' AND 
-           b.Use = 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              b.Tag
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Tag;
+SELECT RecKey, PointNbr,
+       'NA' AS Duration,
+       'Litter' AS IndicatorCategory,
+       Tag AS Indicator,
+       NULL AS ChkBox,
+       NULL AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN CodeTags AS b ON a.Species = b.Code
+ WHERE a.Category = 'Lower' AND 
+       b.Category = 'Litter' AND 
+       b.Use = 1
+ GROUP BY a.RecKey, a.PointNbr, b.Tag;
 			  
 -- View: LPI_CanopyLayers_Point_SoilSurface
 /* Gives information on whether each LPI point has soil surface cover. Soil surface is either a basal species hit (in tblSpecies) 
 or listed in the CodeTags table as a Soil Surface code.*/
 CREATE VIEW LPI_CanopyLayers_Point_SoilSurface AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'NA' AS Duration,
-           'Soil Surface' AS IndicatorCategory,
-           CASE WHEN b.Tag IS NULL THEN 'Basal' ELSE b.Tag END AS Indicator,
-           NULL AS ChkBox,
-           NULL AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           LEFT JOIN
-           CodeTags AS b ON a.Species = b.Code
-           LEFT JOIN
-           tblSpecies AS c ON a.Species = c.SpeciesCode
-     WHERE a.Category = 'Surface' AND 
-           (b.Category = 'Soil Surface' OR 
-            c.SpeciesCode IS NOT NULL) AND 
-           b.Use = 1
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator;
+SELECT RecKey, PointNbr,
+       'NA' AS Duration,
+       'Soil Surface' AS IndicatorCategory,
+       CASE WHEN b.Tag IS NULL THEN 'Basal' 
+            ELSE b.Tag END AS Indicator,
+       NULL AS ChkBox,
+       NULL AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+  LEFT JOIN CodeTags AS b ON a.Species = b.Code
+  LEFT JOIN tblSpecies AS c ON a.Species = c.SpeciesCode
+ WHERE a.Category = 'Surface' AND 
+       (b.Category = 'Soil Surface' OR 
+       c.SpeciesCode IS NOT NULL) AND 
+       b.Use = 1;
 			  
 -- View: LPI_CanopyLayers_Point_SoilSurface_CvrCat
 /* Gives the same information as LPI_CanopyLayers_Point_SoilSurface but instead of 'Any' as a HitCategory, defines the HitCategory 
  as either Bare, Bare Litter, or cover, as determined by the LPI_CanopyDefinitions view.*/
 CREATE VIEW LPI_CanopyLayers_Point_SoilSurface_CvrCat AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           a.PointNbr,
-           a.Duration,
-           'Soil Surface' AS IndicatorCategory,
-           a.Indicator,
-           a.ChkBox,
-           a.Height,
-           CvrCat AS HitCategory
-      FROM LPI_CanopyLayers_Point_SoilSurface AS a
-           LEFT JOIN
-           LPI_CanopyDefinitions AS b ON a.RecKey = b.RecKey AND 
-                                         a.PointNbr = b.PointNbr
-     WHERE a.Indicator <> 'Basal'
-     ORDER BY a.SiteID,
-              a.PlotID,
-              a.LineID,
-              a.FormDate,
-              a.PointNbr;
+SELECT a.RecKey, a.PointNbr, a.Duration,
+       'Soil Surface' AS IndicatorCategory,
+       a.Indicator, a.ChkBox, a.Height,
+       CvrCat AS HitCategory
+  FROM LPI_CanopyLayers_Point_SoilSurface AS a
+  LEFT JOIN LPI_CanopyDefinitions AS b ON a.RecKey = b.RecKey AND a.PointNbr = b.PointNbr
+ WHERE a.Indicator <> 'Basal';
 			  
 -- View: LPI_CanopyLayers_Point_Species
 /* Gives info on species which occur at each LPI point.  Each UNIONED statement provides a separate HitCatgory (Basal, Any First, Height) 
 Most of the complexity of this view arrives from converting plant codes to formmated names. */
 CREATE VIEW LPI_CanopyLayers_Point_Species AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           CASE WHEN Duration IS NULL THEN 'NA' ELSE Duration END AS Duration,
-           'Species' AS IndicatorCategory,
-           CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' WHEN (b.ScientificName IS NULL OR 
-                                                                                                                           b.ScientificName = '') AND 
-                                                                                                                          (b.CommonName IS NULL OR 
-                                                                                                                           b.CommonName = '') THEN b.SpeciesCode WHEN (b.ScientificName IS NULL OR 
-                                                                                                                                                                       b.ScientificName = '') THEN b.CommonName WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' ELSE b.ScientificName END AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE a.Category IN ('Top', 'Lower', 'Surface') AND 
-           a.Species <> 'None' AND 
-           a.Species IS NOT NULL
-     GROUP BY RecKey,
-              PointNbr,
-              Species
-    HAVING Indicator IS NOT NULL
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           CASE WHEN Duration IS NULL THEN 'NA' ELSE Duration END AS Duration,
-           'Species' AS IndicatorCategory,
-           CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' WHEN (b.ScientificName IS NULL OR 
-                                                                                                                           b.ScientificName = '') AND 
-                                                                                                                          (b.CommonName IS NULL OR 
-                                                                                                                           b.CommonName = '') THEN b.SpeciesCode WHEN (b.ScientificName IS NULL OR 
-                                                                                                                                                                       b.ScientificName = '') THEN b.CommonName WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' ELSE b.ScientificName END AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE Category = 'Top' AND 
-           a.Species <> 'None' AND 
-           a.Species IS NOT NULL
-     GROUP BY RecKey,
-              PointNbr,
-              Species
-    HAVING Indicator IS NOT NULL
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           CASE WHEN Duration IS NULL THEN 'NA' ELSE Duration END AS Duration,
-           'Species' AS IndicatorCategory,
-           CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' WHEN (b.ScientificName IS NULL OR 
-                                                                                                                           b.ScientificName = '') AND 
-                                                                                                                          (b.CommonName IS NULL OR 
-                                                                                                                           b.CommonName = '') THEN b.SpeciesCode WHEN (b.ScientificName IS NULL OR 
-                                                                                                                                                                       b.ScientificName = '') THEN b.CommonName WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' ELSE b.ScientificName END AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE Category = 'Surface' AND 
-           a.Species <> 'None' AND 
-           a.Species IS NOT NULL
-     GROUP BY RecKey,
-              PointNbr,
-              Species
-    HAVING Indicator IS NOT NULL
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           CASE WHEN Duration IS NULL THEN 'NA' ELSE Duration END AS Duration,
-           'Species' AS IndicatorCategory,
-           CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' WHEN (b.ScientificName IS NULL OR 
-                                                                                                                           b.ScientificName = '') AND 
-                                                                                                                          (b.CommonName IS NULL OR 
-                                                                                                                           b.CommonName = '') THEN b.SpeciesCode WHEN (b.ScientificName IS NULL OR 
-                                                                                                                                                                       b.ScientificName = '') THEN b.CommonName WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' ELSE b.ScientificName END AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           tblSpecies AS b ON a.Species = b.SpeciesCode
-     WHERE a.Category IN ('HeightHerbaceous', 'HeightWoody') AND 
-           a.Species <> 'None' AND 
-           a.Species IS NOT NULL
-     GROUP BY RecKey,
-              PointNbr,
-              Species
-    HAVING Indicator IS NOT NULL
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       CASE WHEN Duration IS NULL THEN 'NA' 
+            ELSE Duration END AS Duration,
+       'Species' AS IndicatorCategory,
+       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
+            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
+            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
+                ELSE b.ScientificName END AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE a.Category IN ('Top', 'Lower', 'Surface') AND 
+       a.Species <> 'None' AND 
+       a.Species IS NOT NULL
+ GROUP BY RecKey, PointNbr, Species
+HAVING Indicator IS NOT NULL
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       CASE WHEN Duration IS NULL THEN 'NA' 
+            ELSE Duration END AS Duration,
+       'Species' AS IndicatorCategory,
+       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
+            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
+            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
+            ELSE b.ScientificName END AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE Category = 'Top' AND 
+       a.Species <> 'None' AND 
+       a.Species IS NOT NULL
+ GROUP BY RecKey, PointNbr, Species
+HAVING Indicator IS NOT NULL
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       CASE WHEN Duration IS NULL THEN 'NA' 
+            ELSE Duration END AS Duration,
+       'Species' AS IndicatorCategory,
+       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
+            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
+            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
+            ELSE b.ScientificName END AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE Category = 'Surface' AND 
+       a.Species <> 'None' AND 
+       a.Species IS NOT NULL
+ GROUP BY RecKey, PointNbr, Species
+HAVING Indicator IS NOT NULL
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       CASE WHEN Duration IS NULL THEN 'NA' 
+            ELSE Duration END AS Duration,
+       'Species' AS IndicatorCategory,
+       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
+            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
+            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
+            ELSE b.ScientificName END AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE a.Category IN ('HeightHerbaceous', 'HeightWoody') AND 
+       a.Species <> 'None' AND 
+       a.Species IS NOT NULL
+ GROUP BY RecKey, PointNbr, Species
+HAVING Indicator IS NOT NULL;
 			  
 -- View: LPI_CanopyLayers_Point_SpeciesTags
 /* Serves to define whether each LPI point has Species Tag hit on it (non-duration specific, defined in the SpeciesTags table). 
@@ -3041,506 +1895,367 @@ are not used because their data already exists in the duration specific version 
 (See Duration_SpeciesTags_Combinations_Use_Count for more information). Each UNIONED statement provides a separate Hit Category 
 (Any, First, Basal, Height). */
 CREATE VIEW LPI_CanopyLayers_Point_SpeciesTags AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Any' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           SpeciesTags AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
-     WHERE a.Category IN ('Top', 'Lower', 'Surface') AND 
-           c.DurationCount > 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              b.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'First' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           SpeciesTags AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
-     WHERE a.Category = 'Top' AND 
-           c.DurationCount > 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              b.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Basal' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           SpeciesTags AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
-     WHERE a.Category = 'Surface' AND 
-           c.DurationCount > 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              b.Tag
-    UNION ALL
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           PointNbr,
-           'All' AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           Tag AS Indicator,
-           Min(ChkBox) AS ChkBox,
-           Max(Height) AS Height,
-           'Height' AS HitCategory
-      FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
-           JOIN
-           SpeciesTags AS b ON a.Species = b.SpeciesCode
-           LEFT JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
-     WHERE a.Category IN ('HeightWoody', 'HeightHerbaceous') AND 
-           c.DurationCount > 1
-     GROUP BY a.RecKey,
-              a.PointNbr,
-              b.Tag
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              HitCategory;
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Any' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN SpeciesTags AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
+ WHERE a.Category IN ('Top', 'Lower', 'Surface') AND 
+       c.DurationCount > 1
+ GROUP BY a.RecKey, a.PointNbr, b.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+        Max(Height) AS Height,
+        'First' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN SpeciesTags AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
+ WHERE a.Category = 'Top' AND 
+       c.DurationCount > 1
+ GROUP BY a.RecKey, a.PointNbr, b.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+        Max(Height) AS Height,
+        'Basal' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN SpeciesTags AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
+ WHERE a.Category = 'Surface' AND 
+        c.DurationCount > 1
+ GROUP BY a.RecKey, a.PointNbr, b.Tag
+
+ UNION ALL
+SELECT RecKey, PointNbr,
+       'All' AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       Tag AS Indicator,
+       Min(ChkBox) AS ChkBox,
+       Max(Height) AS Height,
+       'Height' AS HitCategory
+  FROM LPI_CanopyLayers_Point_DB_RestrictDates AS a
+ INNER JOIN SpeciesTags AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
+ WHERE a.Category IN ('HeightWoody', 'HeightHerbaceous') AND 
+       c.DurationCount > 1
+ GROUP BY a.RecKey, a.PointNbr, b.Tag;
 			  
 -- View: LPI_Line_Count
 /* Serves as the primary GROUP BY function for converting LPI point information to line totals/averages. */
 CREATE VIEW LPI_Line_Count AS
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           PlotID,
-           LineID,
-           FormDate,
-           IndicatorCategory,
-           Duration,
-           Indicator,
-           HitCategory,
-           Count(PointNbr) AS PointCount,
-           (Sum(CAST (ChkBox AS FLOAT) ) / Count(PointNbr) ) AS ChkPct,
-           Avg(Height) AS HeightMean
-      FROM LPI_Point_Indicators
-     GROUP BY SiteKey,
-              PlotKey,
-              LineKey,
-              RecKey,
-              IndicatorCategory,
-              Indicator,
-              Duration,
-              HitCategory
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              IndicatorCategory,
-              Indicator,
-              Duration,
-              HitCategory;
+SELECT RecKey, Duration, IndicatorCategory, Indicator, HitCategory,
+       Count(PointNbr) AS PointCount,
+       Sum(CAST(ChkBox AS FLOAT))/Count(PointNbr) AS ChkPct,
+       Avg(Height) AS HeightMean
+  FROM LPI_Point_Indicators
+ GROUP BY RecKey, IndicatorCategory, Indicator, Duration, HitCategory;
 			  
 -- View: LPI_Line_IndicatorsCalc
 /* Serves as a way to combine a full indicator list with actual line data.  Indicators with a NULL point count are converted to a zero and hight 
 units are converted at this time. Is the final LPI specific line data product. */
 CREATE VIEW LPI_Line_IndicatorsCalc AS
-    SELECT a.SiteKey AS SiteKey,
-           a.PlotKey AS PlotKey,
-           a.LineKey AS LineKey,
-           a.RecKey AS RecKey,
-           a.SiteID AS SiteID,
-           a.PlotID AS PlotID,
-           a.LineID AS LineID,
-           a.FormDate AS FormDate,
-           'Line-point Intercept' AS Method,
-           a.PointCount AS LineSize,
-           'points' AS LineSizeUnits,
-           a.Duration AS Duration,
-           a.IndicatorCategory AS IndicatorCategory,
-           a.Indicator AS Indicator,
-           a.HitCategory AS HitCategory,
-           CASE WHEN b.PointCount IS NULL THEN 0 ELSE b.PointCount END AS IndicatorSum,
-           CASE WHEN b.PointCount IS NULL THEN 0 ELSE (CAST (b.PointCount AS FLOAT) / a.PointCount) END AS CoverPct,
-           b.ChkPct AS ChkPct,
-           b.HeightMean AS HeightMean,
-           CASE WHEN (
-                         SELECT Value
-                           FROM Data_DBconfig
-                          WHERE VariableName = 'units'
-                     )
-=              'metric' THEN 'cm' ELSE 'in' END AS HeightUnits
-      FROM LPI_Line_IndicatorsCartesian AS a
-           LEFT JOIN
-           LPI_Line_Count AS b ON a.RecKey = b.RecKey AND 
-                                  a.Duration = b.Duration AND 
-                                  a.IndicatorCategory = b.IndicatorCategory AND 
-                                  a.Indicator = b.Indicator AND 
-                                  a.HitCategory = b.HitCategory
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              IndicatorCategory,
-              Indicator,
-              Duration,
-              HitCategory;
+SELECT a.PlotKey, a.LineKey, a.RecKey, a.FormDate,
+       'Line-point Intercept' AS Method,
+       a.PointCount AS LineSize,
+       'points' AS LineSizeUnits,
+       a.Duration, a.IndicatorCategory, a.Indicator, a.HitCategory,
+       CASE WHEN b.PointCount IS NULL THEN 0 
+            ELSE b.PointCount END AS IndicatorSum,
+       CASE WHEN b.PointCount IS NULL THEN 0 
+            ELSE (CAST (b.PointCount AS FLOAT) / a.PointCount) END AS CoverPct,
+       b.ChkPct, b.HeightMean,
+       CASE WHEN (SELECT Value FROM Data_DBconfig WHERE VariableName = 'units') = 'metric' THEN 'cm' 
+            ELSE 'in' END AS HeightUnits
+  FROM LPI_Line_IndicatorsCartesian AS a
+  LEFT JOIN LPI_Line_Count AS b ON a.RecKey = b.RecKey AND 
+                                   a.Duration = b.Duration AND 
+                                   a.IndicatorCategory = b.IndicatorCategory AND 
+                                   a.Indicator = b.Indicator AND 
+                                   a.HitCategory = b.HitCategory;
 			  
 -- View: LPI_Line_IndicatorsCartesian
 /* This view creates a recordset of all possible LPI indicators, durations and hit categories (at least those marked for use) and joins it
 with site/plot/line info.  Serves as a constructor for the LPI_Line_IndicatorsCalc view. */
 CREATE VIEW LPI_Line_IndicatorsCartesian AS
-    SELECT a.*,
-           b.Tag AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           CodeTags_Grouped AS b,
-           HitCategories AS c
-     WHERE b.Category = 'Duration' AND 
-           c.Type = 'Foliar'
-    UNION ALL
-    SELECT a.*,
-           b.DurationTag AS Duration,
-           'Lignification' AS IndicatorCategory,
-           b.GHTag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           Duration_GrowthHabit_Combinations_Use AS b,
-           HitCategories AS c
-     WHERE c.Type = 'Foliar'
-    UNION ALL
-    SELECT a.*,
-           b.DurationTag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           b.GHTag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           Duration_GrowthHabitSub_Combinations_Use AS b,
-           HitCategories AS c
-     WHERE c.Type = 'Foliar'
-    UNION ALL
-    SELECT a.*,
-           b.DurationTag AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           b.SpeciesTag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           Duration_SpeciesTags_Combinations_Use AS b,
-           HitCategories AS c
-     WHERE c.Type = 'Foliar'
-    UNION ALL
-    SELECT a.*,
-           'All' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Foliar' AS Indicator,
-           b.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           HitCategories AS b
-     WHERE b.Type = 'Foliar'
-    UNION ALL
-    SELECT a.*,
-           'NA' AS Duration,
-           'Cover' AS IndicatorCategory,
-           'Ground Cover' AS Indicator,
-           'Any' AS HitCategory
-      FROM LPI_Line_PointCount AS a
-    UNION ALL
-    SELECT a.*,
-           'All' AS Duration,
-           'Lignification' AS IndicatorCategory,
-           b.Tag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           CodeTags_Grouped AS b,
-           HitCategories AS c
-           JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS d ON b.Tag = d.GHTag
-     WHERE b.Category = 'GrowthHabit' AND 
-           c.Type = 'Foliar' AND 
-           d.DurationCount > 1
-    UNION ALL
-    SELECT a.*,
-           'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           b.Tag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           CodeTags_Grouped AS b,
-           HitCategories AS c
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS d ON b.Tag = d.GHTag
-     WHERE b.Category = 'GrowthHabitSub' AND 
-           c.Type = 'Foliar' AND 
-           d.GHCount > 1
-    UNION ALL
-    SELECT a.*,
-           'NA' AS Duration,
-           'Litter' AS IndicatorCategory,
-           b.Tag AS Indicator,
-           'Any' AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           CodeTags_Grouped AS b
-     WHERE b.Category = 'Litter'
-    UNION ALL
-    SELECT a.*,
-           'NA' AS Duration,
-           'Soil Surface' AS IndicatorCategory,
-           b.Tag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           HitCategories AS c,
-           CodeTags_Grouped AS b
-     WHERE b.Category = 'Soil Surface' AND 
-           b.Tag <> 'Basal' AND 
-           c.Type = 'Surface'
-    UNION ALL
-    SELECT a.*,
-           'NA' AS Duration,
-           'Soil Surface' AS IndicatorCategory,
-           b.Tag AS Indicator,
-           'Any' AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           CodeTags_Grouped AS b
-     WHERE b.Category = 'Soil Surface'
-    UNION ALL
-    SELECT a.*,
-           c.Duration,
-           'Species' AS IndicatorCategory,
-           c.Indicator,
-           b.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           HitCategories AS b
-           LEFT JOIN
-           LPI_Plot_Species AS c ON a.PlotKey = c.PlotKey
-     WHERE b.Type = 'Foliar'
-    UNION ALL
-    SELECT a.*,
-           'All' AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           b.SpeciesTag AS Indicator,
-           c.HitCategory AS HitCategory
-      FROM LPI_Line_PointCount AS a,
-           Duration_SpeciesTags_Combinations_Use_Count AS b,
-           HitCategories AS c
-     WHERE c.Type = 'Foliar' AND 
-           b.DurationCount > 1
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              IndicatorCategory,
-              Indicator,
-              Duration,
-              HitCategory;
-			  
+SELECT a.*,
+       b.Tag AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       CodeTags_Grouped AS b,
+       HitCategories AS c
+ WHERE b.Category = 'Duration' AND c.Type = 'Foliar'
+
+ UNION ALL
+SELECT a.*,
+       b.DurationTag AS Duration,
+       'Lignification' AS IndicatorCategory,
+       b.GHTag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       Duration_GrowthHabit_Combinations_Use AS b,
+       HitCategories AS c
+ WHERE c.Type = 'Foliar'
+
+ UNION ALL
+SELECT a.*,
+       b.DurationTag AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       b.GHTag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       Duration_GrowthHabitSub_Combinations_Use AS b,
+       HitCategories AS c
+ WHERE c.Type = 'Foliar'
+
+ UNION ALL
+SELECT a.*,
+       b.DurationTag AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       b.SpeciesTag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       Duration_SpeciesTags_Combinations_Use AS b,
+       HitCategories AS c
+ WHERE c.Type = 'Foliar'
+
+ UNION ALL
+SELECT a.*,
+       'All' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Foliar' AS Indicator,
+       b.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       HitCategories AS b
+ WHERE b.Type = 'Foliar'
+
+ UNION ALL
+
+SELECT a.*,
+       'NA' AS Duration,
+       'Cover' AS IndicatorCategory,
+       'Ground Cover' AS Indicator,
+       'Any' AS HitCategory
+  FROM LPI_Line_PointCount AS a
+  
+ UNION ALL
+SELECT a.*,
+       'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       b.Tag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       CodeTags_Grouped AS b,
+       HitCategories AS c
+ INNER JOIN Duration_GrowthHabit_Combinations_Use_Count AS d ON b.Tag = d.GHTag
+ WHERE b.Category = 'GrowthHabit' AND 
+       c.Type = 'Foliar' AND 
+       d.DurationCount > 1
+
+ UNION ALL
+SELECT a.*,
+       'All' AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       b.Tag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       CodeTags_Grouped AS b,
+       HitCategories AS c
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS d ON b.Tag = d.GHTag
+ WHERE b.Category = 'GrowthHabitSub' AND 
+       c.Type = 'Foliar' AND 
+       d.GHCount > 1
+
+ UNION ALL
+SELECT a.*,
+       'NA' AS Duration,
+       'Litter' AS IndicatorCategory,
+       b.Tag AS Indicator,
+       'Any' AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       CodeTags_Grouped AS b
+ WHERE b.Category = 'Litter'
+
+ UNION ALL
+SELECT a.*,
+       'NA' AS Duration,
+       'Soil Surface' AS IndicatorCategory,
+       b.Tag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       HitCategories AS c,
+       CodeTags_Grouped AS b
+ WHERE b.Category = 'Soil Surface' AND 
+       b.Tag <> 'Basal' AND 
+       c.Type = 'Surface'
+
+ UNION ALL
+SELECT a.*,
+       'NA' AS Duration,
+       'Soil Surface' AS IndicatorCategory,
+       b.Tag AS Indicator,
+       'Any' AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       CodeTags_Grouped AS b
+ WHERE b.Category = 'Soil Surface'
+
+ UNION ALL
+SELECT a.*,
+       c.Duration,
+       'Species' AS IndicatorCategory,
+       c.Indicator,
+       b.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       HitCategories AS b
+  LEFT JOIN LPI_Plot_Species AS c ON a.PlotKey = c.PlotKey
+ WHERE b.Type = 'Foliar'
+
+ UNION ALL
+SELECT a.*,
+       'All' AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       b.SpeciesTag AS Indicator,
+       c.HitCategory AS HitCategory
+  FROM LPI_Line_PointCount AS a,
+       Duration_SpeciesTags_Combinations_Use_Count AS b,
+       HitCategories AS c
+ WHERE c.Type = 'Foliar' AND 
+       b.DurationCount > 1;
+
 -- View: LPI_Line_PointCount
+/* Counts up the number of points per line/record for use in calculations. */
 CREATE VIEW LPI_Line_PointCount AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           Count(c.PointNbr) AS PointCount
-      FROM joinSitePlotLine AS a
-           JOIN
-           tblLPIHeader AS b ON a.LineKey = b.LineKey
-           JOIN
-           tblLPIDetail AS c ON b.RecKey = c.RecKey
-     WHERE c.SoilSurface IS NOT NULL
-     GROUP BY a.SiteID,
-              a.PlotID,
-              a.LineID,
-              b.RecKey;
-			  
+SELECT a.PlotKey, a.LineKey, b.RecKey, b.FormDate, Count(c.PointNbr) AS PointCount
+  FROM tblLines AS a
+ INNER JOIN tblLPIHeader AS b ON a.LineKey = b.LineKey
+ INNER JOIN tblLPIDetail AS c ON b.RecKey = c.RecKey
+ WHERE c.SoilSurface IS NOT NULL
+ GROUP BY a.PlotKey, a.LineKey, b.RecKey;
+
 -- View: LPI_Plot_Species
 /* Serves as a precursor constructor to LPI_Line_IndicatorsCartesian view, giving a list of all species found on the plot for use in 
 generating a total indicator list. */
 CREATE VIEW LPI_Plot_Species AS
-    SELECT SiteKey,
-           PlotKey,
-           SiteID,
-           PlotID,
-           Duration,
-           Indicator
-      FROM LPI_CanopyLayers_Point_Species
-     WHERE HitCategory = 'Any'
-     GROUP BY PlotKey,
-              Duration,
-              Indicator
-     ORDER BY SiteID,
-              PlotID,
-              Indicator;
-			  
--- View: LPI_Point_Indicators
-/* Serves as a way to aggregate all of the individual LPI point subcategories into one recordset for processing. */
-CREATE VIEW LPI_Point_Indicators AS
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Duration_Foliar
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Duration_GrowthHabit
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Duration_GrowthHabitSub
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Duration_SpeciesTags
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Foliar
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_GroundCover
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_GrowthHabit
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_GrowthHabitSub
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Litter
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_SoilSurface
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_SoilSurface_CvrCat
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_Species
-    UNION ALL
-    SELECT *
-      FROM LPI_CanopyLayers_Point_SpeciesTags
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              PointNbr,
-              Indicator,
-              HitCategory;
-			  
+SELECT c.PlotKey, a.Duration, a.Indicator
+  FROM LPI_CanopyLayers_Point_Species AS a
+ INNER JOIN tblLPIHeader AS b ON a.RecKey = b.RecKey
+ INNER JOIN tblLines AS c ON b.LineKey = c.LineKey
+ WHERE a.HitCategory = 'Any'
+ GROUP BY PlotKey, Duration, Indicator;
+ 
+ --View: Cover_Tag_Indicators_Plot
+ /* Creates a set of all Tag/Durations/Indicators/HitCategories present for every Plot/Method where if ther is multiple seasons gives 
+ only the plot with the most reason season.  This is used as a precursor for Cover_Plot, such that missing cover indicators can be 
+ replaced with a zero (i.e. an indicator was not found at a plot thus its cover value is zero). */
+ CREATE VIEW Cover_Tag_Indicators_Plot AS
+ SELECT x.Tag, x.Method, x.Duration, x.IndicatorCategory, x.Indicator, x.HitCategory, y.PlotKey, y.Season, y.Weight
+  FROM 
+       (SELECT b.Tag, a.Method, a.Duration, a.IndicatorCategory, a.Indicator, a.HitCategory
+          FROM Cover_Plot AS a
+         INNER JOIN PlotTags AS b ON a.PlotKey = b.PlotKey
+         GROUP BY b.Tag, a.Method, a.Duration, a.IndicatorCategory, a.Indicator, a.HitCategory) AS x 
+ INNER JOIN 
+       (SELECT q.Tag, q.PlotKey, q.Weight, r.Method, Max(r.Season) AS Season
+          FROM PlotTags AS q 
+         INNER JOIN Cover_Plot AS r ON q.PlotKey = r.PlotKey
+         GROUP BY q.Tag, q.PlotKey, q.Weight, r.Method) AS y ON x.Tag = y.Tag AND x.Method = y.Method;
+ 
+-- View: LPI_Raw
+/* Gives Raw LPI data for report output */
+SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, b.FormDate, c.*
+  FROM joinSitePlotLine AS a
+ INNER JOIN tblLPIHeader AS b ON a.LineKey = b.LineKey
+ INNER JOIN tblLPIDetail AS c ON b.RecKey = c.RecKey
+ ORDER BY SiteID, PlotID, LineID, FormDate, PointLoc;
+
 -- View: NonSpeciesIndicators
 /* Constructs a list of non-species indicators for use in other queries. */
 CREATE VIEW NonSpeciesIndicators AS
-    SELECT 'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           GHTag AS Indicator
-      FROM Duration_GrowthHabit_Combinations_Use_Count
-     WHERE DurationCount > 1
-    UNION ALL
-    SELECT 'All' AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           GHTag AS Indicator
-      FROM Duration_GrowthHabitSub_Combinations_Use_Count
-     WHERE GHCount > 1
-    UNION ALL
-    SELECT 'All' AS Duration,
-           Code AS IndicatorCategory,
-           Tag AS Indicator
-      FROM CodeTags
-     WHERE Code = 'Foliar'
-    UNION ALL
-    SELECT 'All' AS Duration,
+SELECT 'All' AS Duration,
+       'Lignification' AS IndicatorCategory,
+       GHTag AS Indicator
+  FROM Duration_GrowthHabit_Combinations_Use_Count
+ WHERE DurationCount > 1
+
+ UNION ALL
+SELECT 'All' AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       GHTag AS Indicator
+  FROM Duration_GrowthHabitSub_Combinations_Use_Count
+ WHERE GHCount > 1
+
+ UNION ALL
+SELECT 'All' AS Duration,
+       Code AS IndicatorCategory,
+       Tag AS Indicator
+  FROM CodeTags
+ WHERE Code = 'Foliar'
+
+ UNION ALL
+SELECT 'All' AS Duration,
+       'Species Tag' AS IndicatorCategory,
+       SpeciesTag AS Indicator
+  FROM Duration_SpeciesTags_Combinations_Use_Count
+ WHERE DurationCount > 1
+
+ UNION ALL
+SELECT DurationTag AS Duration,
+       'Lignification' AS IndicatorCategory,
+        GHTag AS Indicator
+  FROM Duration_GrowthHabit_Combinations_Use
+
+ UNION ALL
+SELECT DurationTag AS Duration,
+       'Growth Habit' AS IndicatorCategory,
+       GHTag AS Indicator
+  FROM Duration_GrowthHabitSub_Combinations_Use
+
+ UNION ALL
+SELECT a.Tag AS Duration,
+       'Foliar' AS IndicatorCategory,
+       b.Tag AS Indicator
+  FROM CodeTags AS a, CodeTags AS b
+ WHERE a.Category = 'Duration' AND 
+       b.Category = 'Foliar' AND 
+       a.Use = 1
+ GROUP BY Duration, IndicatorCategory, Indicator
+
+ UNION ALL
+SELECT 'NA' AS Duration,
+       Category AS IndicatorCategory,
+        Code AS Indicator
+  FROM CodeTags
+ WHERE IndicatorCategory = 'Gap'
+
+ UNION ALL
+SELECT 'NA' AS Duration,
+       a.Category AS IndicatorCategory,
+       (a.Code || ' (' || b.StartOperator || b.StartLimit ||  
+           CASE WHEN EndOperator IS NULL THEN ')' 
+                ELSE ' to ' || EndOperator || EndLimit || ')' END) AS Indicator
+  FROM CodeTags AS a, LI_SizeClasses AS b
+ WHERE IndicatorCategory = 'Gap'
+
+ UNION ALL
+SELECT DurationTag AS Duration,
            'Species Tag' AS IndicatorCategory,
            SpeciesTag AS Indicator
-      FROM Duration_SpeciesTags_Combinations_Use_Count
-     WHERE DurationCount > 1
-    UNION ALL
-    SELECT DurationTag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           GHTag AS Indicator
-      FROM Duration_GrowthHabit_Combinations_Use
-    UNION ALL
-    SELECT DurationTag AS Duration,
-           'Growth Habit' AS IndicatorCategory,
-           GHTag AS Indicator
-      FROM Duration_GrowthHabitSub_Combinations_Use
-    UNION ALL
-    SELECT a.Tag AS Duration,
-           'Foliar' AS IndicatorCategory,
-           b.Tag AS Indicator
-      FROM CodeTags AS a,
-           CodeTags AS b
-     WHERE a.Category = 'Duration' AND 
-           b.Category = 'Foliar' AND 
-           a.Use = 1
-     GROUP BY Duration,
-              IndicatorCategory,
-              Indicator
-    UNION ALL
-    SELECT 'NA' AS Duration,
-           Category AS IndicatorCategory,
-           Code AS Indicator
-      FROM CodeTags
-     WHERE IndicatorCategory = 'Gap'
-    UNION ALL
-    SELECT 'NA' AS Duration,
-           a.Category AS IndicatorCategory,
-           CASE WHEN b.EndLimit IS NULL THEN (a.Code || ' (' || b.StartLimit || '+)') ELSE (a.Code || ' (' || b.StartLimit || '-' || b.EndLimit || ')') END AS Indicator
-      FROM CodeTags AS a,
-           LI_SizeClasses AS b
-     WHERE IndicatorCategory = 'Gap'
-    UNION ALL
-    SELECT DurationTag AS Duration,
-           'Species Tag' AS IndicatorCategory,
-           SpeciesTag AS Indicator
-      FROM Duration_SpeciesTags_Combinations_Use
-     ORDER BY IndicatorCategory,
-              Indicator,
-              Duration;
+  FROM Duration_SpeciesTags_Combinations_Use;
 			  
 -- View: PD_ClassLabels
 /* Converts the wide view of Plant Density labels to a long view. */

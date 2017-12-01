@@ -24,13 +24,13 @@ INSERT OR IGNORE INTO PlotTags SELECT a.PlotKey,
 
 --Tag Type: Plot --Tag: SiteName_Ecological Group					  
 INSERT OR IGNORE INTO PlotTags SELECT a.PlotKey,
-                            b.SiteName || '_' || CASE WHEN c.EcoGroup IS NULL THEN Trim(a.EcolSite) ELSE c.EcoGroup END AS Tag,
+                            b.SiteName || '_' || CASE WHEN c.ecogroup IS NULL THEN Trim(a.EcolSite) ELSE c.ecogroup END AS Tag,
                             1 AS Weight
                        FROM tblPlots AS a
                             JOIN
                             tblSites AS b ON a.SiteKey = b.SiteKey
                             LEFT JOIN
-                            EcositeGroups AS c ON a.Ecolsite = c.EcolSiteID
+                            ecosite_groups AS c ON a.Ecolsite = c.ecoid_long
                       WHERE b.SiteKey NOT IN ('888888888', '999999999');
 
 				
@@ -56,13 +56,13 @@ INSERT OR IGNORE INTO PlotTags SELECT a.PlotKey,
 					  
 --Tag Type: Plot --Tag: SiteID_Ecological Group					  
 INSERT OR IGNORE INTO PlotTags SELECT a.PlotKey,
-                            b.SiteID || '_' || CASE WHEN c.EcoGroup IS NULL THEN Trim(a.EcolSite) ELSE c.EcoGroup END AS Tag,
+                            b.SiteID || '_' || CASE WHEN c.ecogroup IS NULL THEN Trim(a.EcolSite) ELSE c.ecogroup END AS Tag,
                             1 AS Weight
                        FROM tblPlots AS a
                             JOIN
                             tblSites AS b ON a.SiteKey = b.SiteKey
                             LEFT JOIN
-                            EcositeGroups AS c ON a.Ecolsite = c.EcolSiteID
+                            ecosite_groups AS c ON a.Ecolsite = c.ecoid_long
                       WHERE b.SiteKey NOT IN ('888888888', '999999999');
 
 					  
@@ -78,13 +78,13 @@ INSERT OR IGNORE INTO PlotTags SELECT a.PlotKey,
 					  
 --Tag Type: Plot --Tag: Ecological Group					  
 INSERT OR IGNORE INTO PlotTags SELECT a.PlotKey,
-                            CASE WHEN c.EcoGroup IS NULL THEN Trim(a.EcolSite) ELSE c.EcoGroup END AS Tag,
+                            CASE WHEN c.ecogroup IS NULL THEN Trim(a.EcolSite) ELSE c.ecogroup END AS Tag,
                             1 AS Weight
                        FROM tblPlots AS a
                             JOIN
                             tblSites AS b ON a.SiteKey = b.SiteKey
                             LEFT JOIN
-                            EcositeGroups AS c ON a.Ecolsite = c.EcolSiteID
+                            ecosite_groups AS c ON a.Ecolsite = c.ecoid_long
                       WHERE b.SiteKey NOT IN ('888888888', '999999999');
 
 

@@ -37,10 +37,10 @@ CREATE TABLE Data_DBconfig (VariableName TEXT, Value TEXT, PossibleValues TEXT);
 to be populated accurately, (i.e. a Shrub would not have an Annual duration, etc.) */
 CREATE TABLE Duration_GrowthHabit_Combinations (GrowthHabit CHAR, DurationTag CHAR, Use INTEGER DEFAULT (1), Category CHAR);
 
--- Table: EcositeGroups
+-- Table: ecosite_groups
 /* This table provides a way to group ecological sites (given in tblPlots) into larger ecological groups if they exist.  If this table is populated 
  via the insert_config.sql file then the DB will populate plot tags based on these groups. */
-CREATE TABLE EcositeGroups (EcolSiteIDStd TEXT PRIMARY KEY, EcolSiteID TEXT, EcolSiteVeg TEXT, EcolSiteName TEXT, EcolsiteType TEXT, MLRA TEXT, EcoGroup TEXT, Subgroup TEXT, GroupType TEXT, Acreage REAL, Model BOOLEAN, DraftStatus TEXT);
+CREATE TABLE ecosite_groups (ecoid TEXT PRIMARY KEY, ecoid_long TEXT, ecogroup TEXT, ecosubgroup TEXT, group_type  TEXT, modal BOOLEAN, pub_status TEXT);
 
 -- Table: Exports
 /* Provides a list of non-QAQC exports for use by the RD Export form. */
@@ -251,8 +251,33 @@ CREATE TABLE tblSpecRichDetail (RecKey TEXT, subPlotID INTEGER, subPlotDesc TEXT
 /* DIMA table. */
 CREATE TABLE tblSpecRichHeader (LineKey TEXT, RecKey TEXT, DateModified DATETIME, FormType TEXT, FormDate DATETIME, Observer TEXT, Recorder TEXT, DataEntry TEXT, DataErrorChecking TEXT, SpecRichMethod INTEGER, SpecRichMeasure INTEGER, SpecRichNbrSubPlots INTEGER, SpecRich1Container BOOLEAN, SpecRich1Shape INTEGER, SpecRich1Dim1 REAL, SpecRich1Dim2 REAL, SpecRich1Area REAL, SpecRich2Container BOOLEAN, SpecRich2Shape INTEGER, SpecRich2Dim1 REAL, SpecRich2Dim2 REAL, SpecRich2Area REAL, SpecRich3Container BOOLEAN, SpecRich3Shape INTEGER, SpecRich3Dim1 REAL, SpecRich3Dim2 REAL, SpecRich3Area REAL, SpecRich4Container BOOLEAN, SpecRich4Shape INTEGER, SpecRich4Dim1 REAL, SpecRich4Dim2 REAL, SpecRich4Area REAL, SpecRich5Container BOOLEAN, SpecRich5Shape INTEGER, SpecRich5Dim1 REAL, SpecRich5Dim2 REAL, SpecRich5Area REAL, SpecRich6Container BOOLEAN, SpecRich6Shape INTEGER, SpecRich6Dim1 REAL, SpecRich6Dim2 REAL, SpecRich6Area REAL, Notes TEXT, PRIMARY KEY (RecKey));
 
+--The following tables are created for intermediary data processing.
+--
+--
+
+--Table: lpi_detail
+/* Translates tblLPIDetail into a single record per canopy layer style and joins it to the header/line/plot tables.
+This facilitates parsing out data by canopy layer which is central to most LPI processing. Each layer is separated and then
+UNIONED with other layers. The GLOB function serves as a way to weed out non-numeric Height entries, replacing them with NULL.
+Also these individial SELECT statements convert height to the the units selected in the Data_DBconfig table via the 
+UnitConversion_Use view. */
+CREATE TABLE IF NOT EXISTS lpi_detail (RecKey TEXT, PointNbr INTEGER, Species TEXT, ChkBox BOOLEAN, Height REAL, Category TEXT, Layer INTEGER, PRIMARY KEY (RecKey, PointNbr, Layer));
+
+-- Table: LPI_Point_Indicators
+/* Serves as a way to aggregate all of the individual LPI point subcategories into one recordset for processing. */
+CREATE TABLE IF NOT EXISTS LPI_Point_Indicators (RecKey TEXT, PointNbr INTEGER, Duration TEXT, IndicatorCategory TEXT, Indicator TEXT, ChkBox BOOLEAN, Height REAL, HitCategory TEXT, PRIMARY KEY(RecKey, PointNbr, Duration, Indicator, HitCategory));
+
+-- Table: Cover_Line
+/* Serves as the final product for line information for percent cover. */
+CREATE TABLE IF NOT EXISTS Cover_Line 
+	   (SiteKey TEXT, PlotKey TEXT, LineKey TEXT, RecKey TEXT, SiteID TEXT, PlotID TEXT, LineID TEXT, FormDate DATETIME, 
+	   Method TEXT, LineSize REAL, LineSizeUnits TEXT, Duration TEXT, IndicatorCategory TEXT, Indicator TEXT, HitCategory TEXT, 
+	   IndicatorSum INTEGER, CoverPct REAL, ChkPct REAL, PRIMARY KEY (RecKey, Method, Duration, Indicator, HitCategory ));
+
 
 --Create Indexes
+--
+--
 
 -- Index: tblEcolSites_EcolSite
 CREATE INDEX tblEcolSites_EcolSite ON tblEcolSites (EcolSite ASC);

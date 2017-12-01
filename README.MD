@@ -31,8 +31,10 @@ Users need to have python 3.x installed and from their command line environment 
 Simple usage would be the following:
 1. Create a new blank database with the 'Create New Database' button.  This will create a new blank reporting database.  Users can customize the SQL scripts in the /sql/ folder to alter the database as needed for a specific project.  Users can also use the 'Run SQL Script' Button to run custom SQL in the database after creation in order to customize.
 2. Use the 'Import DIMA Data' button to import one or more DIMA data sets into the database. Users will be asked if they prefer to delete existing data or not.  In the case of records with identical primary keys, existing data are given precedence.
-3. Users can then click the 'Export' button in order to export final products or QC checks into a Microsoft Excel format.
-4. If users want to switch back and forth between different reporting databases they can use the 'Connect to Database' button to change the database they are connected to, which is listed at the top of the form.
+3. Run any custom sql scripts desired with the *Run SQL Script* button.
+4. Hit the *Recalculate* button in order to process intermediate calculations and store them in tables (needed due to complicated queries and MemoryError issues with large datasets).
+5. Users can then click the 'Export' button in order to export final products or QC checks into a Microsoft Excel format.
+6. If users want to switch back and forth between different reporting databases they can use the 'Connect to Database' button to change the database they are connected to, which is listed at the top of the form.
 
 A couple more things to note: 
 * Users customizing the SQL scripts must maintain the same script names within the /sql/ path.  It is recommended at this time for multiple projects needing different setup scripts, that users create different paths for the script sets (e.g. /sql_project1, /sql_project2, etc.). 
