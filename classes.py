@@ -64,7 +64,7 @@ class stdevw:
         if wgt == None:
             wgt = 1
         if value != None:
-            self.list.append(value*wgt)
+            self.list.append(value)
             self.wgtlist.append(wgt)
     def finalize(self):
         #print(self.list)
@@ -76,10 +76,11 @@ class stdevw:
             w = numpy.array(self.wgtlist)
             V1 = numpy.sum(w)
             V2 = numpy.sum(w**2)
-            mu = (numpy.sum(w*y)/V1)
+            mu = (numpy.sum(w*y)/V1) #weighted mean
             muArray = numpy.full(y.size, mu)
             sigma2w = numpy.sum(w*((y-muArray)**2))
             self.x = (sigma2w/(V1-(V2/V1)))**(0.5)
+            #print("mu:",mu,"V1:",V1,"V2:",V2,"sigma2w:", sigma2w,"x:", self.x)
         else:
             self.x = None
         return self.x
