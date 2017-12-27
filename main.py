@@ -211,8 +211,11 @@ class MainForm:
         if var['RDpath'] != None:
             if os.path.isfile(var['RDpath']):
                 conn = sqlite.connect(var['RDpath'])
-                run_sqlscript(conn, None)
-                tkinter.messagebox.showinfo("Done.", "SQL script run.")
+                success, stmts = run_sqlscript(conn, None)
+                if success:
+                    tkinter.messagebox.showinfo("Done.", "SQL script run.")
+                elif not success and stmts != None:
+                    tkinter.messagebox.showinfo("Errors.", "SQL script did not finish successfully.")
                 self.lblAction['text'] = ''
                 self.lblAction.update_idletasks()
                 conn.close()

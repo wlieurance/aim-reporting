@@ -6,6 +6,9 @@ BEGIN TRANSACTION;
 This script converts some view results to indexed tables in order to solve the problem at the cost of disk space. */
 
 --Delete/Insert: LPI_CanopyLayers_Point_DB_UNION was old view name.
+--
+--
+--
 DELETE FROM lpi_detail;
 
 INSERT OR IGNORE INTO lpi_detail
@@ -240,8 +243,231 @@ SELECT RecKey, PointNbr,
  GROUP BY RecKey, PointNbr, Duration, Indicator
  ORDER BY RecKey, PointNbr, Duration, Indicator;
  
+ --Delete/Insert: LI_LineSum was old view name.
+ --
+ --
+ --
+DELETE FROM LI_LineSum;
+ 
+INSERT OR IGNORE INTO LI_LineSum
+SELECT RecKey, Method, SegType,
+       'Gap' AS IndicatorCategory,
+       'NA' AS Duration,
+       'Gap' AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ WHERE Species = 'GAP'
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Creates the size class version of the Gap indicator. The CASE operator serves to contruct the indicator name from the size classes.*/
+SELECT RecKey, Method, SegType,
+       'Gap' AS IndicatorCategory,
+       'NA' AS Duration,
+       ('Gap (' || b.StartOperator || b.StartLimit ||  
+             CASE WHEN EndOperator IS NULL THEN ')' 
+                  ELSE ' to ' || EndOperator || EndLimit || ')' END) AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a, LI_SizeClasses AS b
+ WHERE Species = 'GAP' AND 
+       (CASE WHEN b.StartOperator = '>' THEN Abs(SegStart - SegEnd) > b.StartLimit 
+             WHEN b.StartOperator = '>=' THEN Abs(SegStart - SegEnd) >= b.StartLimit 
+             ELSE 1 END) AND 
+       (CASE WHEN b.EndOperator = '<' THEN Abs(SegStart - SegEnd) < b.EndLimit 
+             WHEN b.EndOperator = '<=' THEN Abs(SegStart - SegEnd) <= b.EndLimit ELSE 1 END) 
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the species indicator. CodeTags serves as a duration converter.*/
+SELECT RecKey, Method, SegType,
+       'Species' AS IndicatorCategory,
+       CASE WHEN b.Duration IS NULL THEN 'NA' ELSE b.Duration END AS Duration,
+       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND 
+                 (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
+            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
+            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
+            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
+            ELSE b.ScientificName END AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ WHERE b.SpeciesCode IS NOT NULL
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the non-duration foliar indicator. */
+SELECT RecKey, Method, SegType,
+       'Foliar' AS IndicatorCategory,
+       'All' AS Duration,
+       'Foliar' AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ WHERE Species <> 'GAP'
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the duration specific foliar indicator. CodeTags serves as a duration converter. */
+SELECT RecKey, Method, SegType,
+       'Foliar' AS IndicatorCategory,
+       c.Tag AS Duration,
+       'Foliar' AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN CodeTags AS c ON b.Duration = c.Code
+ WHERE Species <> 'GAP' AND 
+       c.Category = 'Duration' AND 
+       c.Use = 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the duration specific GrowthHabitSub Indicator (Growth Habit). CodeTags used to filter and convert durations and growth habits.*/
+SELECT RecKey, Method, SegType,
+       'GrowthHabit' AS IndicatorCategory,
+       e.Tag AS Duration, d.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+ INNER JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+ INNER JOIN CodeTags AS e ON b.Duration = e.Code
+ WHERE Species <> 'GAP' AND 
+       d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.Category = 'Duration' AND 
+       e.Use = 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the non-duration specific GrowthHabitSub Indicator (Growth Habit). CodeTags used to filter and convert growth habits.*/
+SELECT RecKey, Method, SegType,
+       'GrowthHabit' AS IndicatorCategory,
+       'All' AS Duration,
+       d.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+ INNER JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON d.Tag = e.GHTag
+ WHERE Species <> 'GAP' AND 
+       d.Category = 'GrowthHabitSub' AND 
+       d.Use = 1 AND 
+       e.GHCount > 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the duration specific GrowthHabit Indicator (Lignification). CodeTags used to filter and convert durations and growth habits.*/
+SELECT RecKey, Method, SegType, IndicatorCategory, Duration, Indicator,
+       Avg(length) AS LengthMean,
+       Sum(length) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM 
+       (SELECT a.RecKey, a.Method, a.SegType,
+               'Lignification' AS IndicatorCategory,
+               e.Tag AS Duration, d.Tag AS Indicator,
+               Abs(a.SegStart - a.SegEnd) AS length,
+               a.Height, a.ChkBox
+          FROM LI_Detail_View AS a
+         INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+          LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+         INNER JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+         INNER JOIN CodeTags AS e ON b.Duration = e.Code
+         WHERE a.Species <> 'GAP' AND 
+               d.Category = 'GrowthHabit' AND 
+               d.Use = 1 AND 
+               e.Category = 'Duration' AND 
+               e.Use = 1)
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the non-duration specific GrowthHabit Indicator (Lignification). CodeTags used to filter and convert growth habits.*/
+SELECT RecKey, Method, SegType, IndicatorCategory, Duration, Indicator,
+       Avg(length) AS LengthMean,
+       Sum(length) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM 
+       (SELECT a.RecKey, a.Method, a.SegType,
+               'Lignification' AS IndicatorCategory,
+               'All' AS Duration,
+               d.Tag AS Indicator,
+               SegStart, SegEnd, Height, ChkBox,
+               Abs(SegStart - SegEnd) AS length
+          FROM LI_Detail_View AS a
+         INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+          LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
+         INNER JOIN CodeTags AS d ON c.GrowthHabit = d.Code
+         INNER JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON d.Tag = e.GHTag
+         WHERE a.Species <> 'GAP' AND 
+               d.Category = 'GrowthHabit' AND 
+               d.Use = 1 AND 
+               e.DurationCount > 1)
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+INSERT OR IGNORE INTO LI_LineSum
+/* Provides the non-duration specific Species Tag Indicator. */
+SELECT RecKey, Method, SegType,
+       'Species Tag' AS IndicatorCategory,
+       'All' AS Duration,
+       c.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON b.SpeciesCode = c.SpeciesCode
+ INNER JOIN Duration_SpeciesTags_Combinations_Use_Count AS d ON c.Tag = d.SpeciesTag
+ WHERE Species <> 'GAP' AND d.DurationCount > 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator;
+
+ INSERT OR IGNORE INTO LI_LineSum
+/* Provides the duration specific Species Tag Indicator. CodeTags used to filter and convert durations.*/
+SELECT RecKey, Method, SegType,
+       'Species Tag' AS IndicatorCategory,
+       d.Tag AS Duration, c.Tag AS Indicator,
+       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
+       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
+       Avg(Height) AS HeightMean,
+       Avg(ChkBox) AS ChkBoxMean
+  FROM LI_Detail_View AS a
+ INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
+ INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
+ INNER JOIN CodeTags AS d ON b.Duration = d.Code
+ WHERE Species <> 'GAP' AND 
+       d.Category = 'Duration' AND 
+       d.Use = 1
+ GROUP BY RecKey, Method, SegType, IndicatorCategory, d.Tag, c.Tag;
+ 
 
 --Delete/Insert: Cover_Line was name of old view
+--
+--
+--
 DELETE FROM Cover_Line;
 
 INSERT INTO Cover_Line 
@@ -251,13 +477,27 @@ SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID,
        b.IndicatorSum, b.CoverPct, b.ChkPct
   FROM joinSitePlotLine AS a
  INNER JOIN LPI_Line_IndicatorsCalc AS b ON a.LineKey = b.LineKey
- WHERE HitCategory <> 'Height'
+ WHERE HitCategory <> 'Height';
 
- UNION ALL
+INSERT INTO Cover_Line
 SELECT *
-  FROM LI_Line_Cover
- ORDER BY SiteID, PlotID, LineID, FormDate, Method, 
-       IndicatorCategory, Indicator, Duration;
+  FROM LI_Line_Cover;
 
+--Delete/Insert: SR_Line was name of old view
+--
+--
+--  
+DELETE FROM SR_Line;
+INSERT INTO SR_Line
+SELECT a.*,
+       CASE WHEN b.subPlot_n IS NULL THEN 0 ELSE b.subPlot_n END AS subPlot_n,
+       CASE WHEN b.MeanSpecies_n IS NULL THEN 0 ELSE b.MeanSpecies_n END AS MeanSpecies_n
+  FROM SR_Line_Count AS a
+ INNER JOIN SR_Line_Mean AS b ON a.RecKey = b.RecKey AND 
+                                 a.Duration = b.Duration AND 
+                                 a.Indicator = b.Indicator
+ ORDER BY a.SiteID, a.PlotID, a.LineID, a.FormDate, a.IndicatorCategory, a.Duration, a.Indicator;
+  
+  
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;

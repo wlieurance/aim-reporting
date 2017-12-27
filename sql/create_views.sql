@@ -628,38 +628,14 @@ CREATE VIEW LI_Header_View AS
 -- View: LI_Line_Cover
 /* Splits off LI Pct Cover information and formats it so it can be a precursor to the final products. */
 CREATE VIEW LI_Line_Cover AS
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           b.RecKey,
-           a.SiteID,
-           a.PlotID,
-           a.LineID,
-           b.FormDate,
-           c.Method,
-           c.LineLengthAmount AS LineSize,
-           c.LengthUnits AS LineSizeUnits,
-           c.Duration,
-           c.IndicatorCategory,
-           c.Indicator,
-           c.InterceptType AS HitCategory,
-           c.LengthSum AS IndicatorSum,
-           c.PctCover AS CoverPct,
-           c.ChkBoxMean AS ChkPct
-      FROM joinSitePlotLine AS a
-           JOIN
-           LI_Header_View AS b ON a.LineKey = b.LineKey
-           JOIN
-           LI_LineCalc AS c ON b.RecKey = c.RecKey AND 
-                               b.Method = c.Method
-     ORDER BY a.SiteID,
-              a.PlotID,
-              a.LineID,
-              b.FormDate,
-              c.Method,
-              c.IndicatorCategory,
-              c.Indicator,
-              c.Duration;
+SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID, a.LineID, b.FormDate,
+       c.Method, c.LineLengthAmount AS LineSize, c.LengthUnits AS LineSizeUnits, c.Duration,
+       c.IndicatorCategory, c.Indicator, c.InterceptType AS HitCategory, c.LengthSum AS IndicatorSum,
+       c.PctCover AS CoverPct, c.ChkBoxMean AS ChkPct
+  FROM joinSitePlotLine AS a
+ INNER JOIN LI_Header_View AS b ON a.LineKey = b.LineKey
+ INNER JOIN LI_LineCalc AS c ON b.RecKey = c.RecKey AND b.Method = c.Method
+ ORDER BY a.SiteID, a.PlotID, a.LineID, b.FormDate, c.Method, c.IndicatorCategory, c.Indicator, c.Duration;
 			  
 -- View: LI_Line_Height
 /* Splits off LI Height information and formats it so it can be a precursor to the final products. */
@@ -697,36 +673,6 @@ CREATE VIEW LI_Line_Height AS
               c.IndicatorCategory,
               c.Indicator,
               c.Duration;
-			  
--- View: LI_Line_IndicatorsCartesian
-/* Constructs a complete list of Line-Intercept indicators for each LI line. For use in later matching up existing data and 
-defining null data. */
-CREATE VIEW LI_Line_IndicatorsCartesian AS
-SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
-  FROM LI_PlotsLinesForms AS a,
-       NonSpeciesIndicators AS b
- WHERE a.Method = 'Continuous Line Intercept' AND b.IndicatorCategory <> 'Gap'
-
- UNION ALL
-SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
-  FROM LI_PlotsLinesForms AS a,
-       NonSpeciesIndicators AS b
- WHERE a.Method = 'Canopy Gap with Species'
-
- UNION ALL
-SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
-  FROM LI_PlotsLinesForms AS a,
-       NonSpeciesIndicators AS b
- WHERE a.Method = 'Gap Intercept' AND b.IndicatorCategory = 'Gap'
-
- UNION ALL
-SELECT y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator
-  FROM
-       (SELECT b.LineKey, a.Method, a.SegType, 'Species' AS IndicatorCategory, a.Duration, a.Indicator
-          FROM LI_Plot_Species AS a
-         INNER JOIN tblLines AS b ON a.PlotKey = b.PlotKey) AS x
- INNER JOIN LI_Header_View AS y ON x.LineKey = y.LineKey AND x.Method = y.Method
- GROUP BY y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator;
 			  
 -- View: LI_Line_Length
 /* Splits off LI Length information and formats it so it can be a precursor to the final products. */
@@ -784,225 +730,54 @@ SELECT a.LineKey, b.RecKey, b.Method,
   LEFT JOIN UnitConversion_Use AS c ON a.LineLengthUnit = c.Units
   LEFT JOIN UnitConversion_Use AS d ON a.SegUnit = d.Units
   LEFT JOIN UnitConversion_Use AS e ON a.HeightUnit = e.Units;
-			  
--- View: LI_LineSum
-/* Serves as the primary calculator of final line totals/averages from raw line intercept detail data. See inside statement 
-for indivudual descriptions. */
-CREATE VIEW LI_LineSum AS
-    /* Creates the non-size class gap indicator*/
-SELECT RecKey, Method, SegType,
-       'Gap' AS IndicatorCategory,
-       'NA' AS Duration,
-       'Gap' AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- WHERE Species = 'GAP'
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+  
+ --View: LI_Line_IndicatorsCartesian
+/* Creates a full list of Iindicators for the LI methods. DEPRECATED */
+SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
+  FROM LI_PlotsLinesForms AS a,
+       NonSpeciesIndicators AS b
+ WHERE a.Method = 'Continuous Line Intercept' AND b.IndicatorCategory <> 'Gap'
 
- UNION ALL
-/* Creates the size class version of the Gap indicator. The CASE operator serves to contruct the indicator name from the size classes.*/
-SELECT RecKey, Method, SegType,
-       'Gap' AS IndicatorCategory,
-       'NA' AS Duration,
-       ('Gap (' || b.StartOperator || b.StartLimit ||  
-             CASE WHEN EndOperator IS NULL THEN ')' 
-                  ELSE ' to ' || EndOperator || EndLimit || ')' END) AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a, LI_SizeClasses AS b
- WHERE Species = 'GAP' AND 
-       (CASE WHEN b.StartOperator = '>' THEN Abs(SegStart - SegEnd) > b.StartLimit 
-             WHEN b.StartOperator = '>=' THEN Abs(SegStart - SegEnd) >= b.StartLimit 
-             ELSE 1 END) AND 
-       (CASE WHEN b.EndOperator = '<' THEN Abs(SegStart - SegEnd) < b.EndLimit 
-             WHEN b.EndOperator = '<=' THEN Abs(SegStart - SegEnd) <= b.EndLimit ELSE 1 END) 
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+ UNION
+SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
+  FROM LI_PlotsLinesForms AS a,
+       NonSpeciesIndicators AS b
+ WHERE a.Method = 'Canopy Gap with Species';
 
- UNION ALL
-/* Provides the species indicator. CodeTags serves as a duration converter.*/
-SELECT RecKey, Method, SegType,
-       'Species' AS IndicatorCategory,
-       CASE WHEN b.Duration IS NULL THEN 'NA' ELSE b.Duration END AS Duration,
-       CASE WHEN b.CodeType = 'generic' THEN 'Unidentified ' || b.ScientificName || ' (' || b.SpeciesCode || ')' 
-            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') AND 
-                 (b.CommonName IS NULL OR b.CommonName = '') THEN b.SpeciesCode 
-            WHEN (b.ScientificName IS NULL OR b.ScientificName = '') THEN b.CommonName 
-            WHEN b.CodeType = 'family' THEN b.Family || ' genus sp.' 
-            WHEN b.CodeType = 'genus' THEN b.ScientificName || ' sp.' 
-            ELSE b.ScientificName END AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
- WHERE b.SpeciesCode IS NOT NULL
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
+ UNION
+SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
+  FROM LI_PlotsLinesForms AS a,
+       NonSpeciesIndicators AS b
+ WHERE a.Method = 'Gap Intercept' AND b.IndicatorCategory = 'Gap'
 
- UNION ALL
-/* Provides the non-duration foliar indicator. */
-SELECT RecKey, Method, SegType,
-       'Foliar' AS IndicatorCategory,
-       'All' AS Duration,
-       'Foliar' AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- WHERE Species <> 'GAP'
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the duration specific foliar indicator. CodeTags serves as a duration converter. */
-SELECT RecKey, Method, SegType,
-       'Foliar' AS IndicatorCategory,
-       c.Tag AS Duration,
-       'Foliar' AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
- INNER JOIN CodeTags AS c ON b.Duration = c.Code
- WHERE Species <> 'GAP' AND 
-       c.Category = 'Duration' AND 
-       c.Use = 1
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the duration specific GrowthHabitSub Indicator (Growth Habit). CodeTags used to filter and convert durations and growth habits.*/
-SELECT RecKey, Method, SegType,
-       'GrowthHabit' AS IndicatorCategory,
-       e.Tag AS Duration, d.Tag AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
-  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
- INNER JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
- INNER JOIN CodeTags AS e ON b.Duration = e.Code
- WHERE Species <> 'GAP' AND 
-       d.Category = 'GrowthHabitSub' AND 
-       d.Use = 1 AND 
-       e.Category = 'Duration' AND 
-       e.Use = 1
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the non-duration specific GrowthHabitSub Indicator (Growth Habit). CodeTags used to filter and convert growth habits.*/
-SELECT RecKey, Method, SegType,
-       'GrowthHabit' AS IndicatorCategory,
-       'All' AS Duration,
-       d.Tag AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
-  LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
- INNER JOIN CodeTags AS d ON c.GrowthHabitSub = d.Code
- INNER JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS e ON d.Tag = e.GHTag
- WHERE Species <> 'GAP' AND 
-       d.Category = 'GrowthHabitSub' AND 
-       d.Use = 1 AND 
-       e.GHCount > 1
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the duration specific GrowthHabit Indicator (Lignification). CodeTags used to filter and convert durations and growth habits.*/
-SELECT RecKey, Method, SegType, IndicatorCategory, Duration, Indicator,
-       Avg(length) AS LengthMean,
-       Sum(length) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM 
-       (SELECT a.RecKey, a.Method, a.SegType,
-               'Lignification' AS IndicatorCategory,
-               e.Tag AS Duration, d.Tag AS Indicator,
-               Abs(a.SegStart - a.SegEnd) AS length,
-               a.Height, a.ChkBox
-          FROM LI_Detail_View AS a
-         INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
-          LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-         INNER JOIN CodeTags AS d ON c.GrowthHabit = d.Code
-         INNER JOIN CodeTags AS e ON b.Duration = e.Code
-         WHERE a.Species <> 'GAP' AND 
-               d.Category = 'GrowthHabit' AND 
-               d.Use = 1 AND 
-               e.Category = 'Duration' AND 
-               e.Use = 1)
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the non-duration specific GrowthHabit Indicator (Lignification). CodeTags used to filter and convert growth habits.*/
-SELECT RecKey, Method, SegType, IndicatorCategory, Duration, Indicator,
-       Avg(length) AS LengthMean,
-       Sum(length) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM 
-       (SELECT a.RecKey, a.Method, a.SegType,
-               'Lignification' AS IndicatorCategory,
-               'All' AS Duration,
-               d.Tag AS Indicator,
-               SegStart, SegEnd, Height, ChkBox,
-               Abs(SegStart - SegEnd) AS length
-          FROM LI_Detail_View AS a
-         INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
-          LEFT JOIN tblSpeciesGrowthHabit AS c ON b.GrowthHabitCode = c.Code
-         INNER JOIN CodeTags AS d ON c.GrowthHabit = d.Code
-         INNER JOIN Duration_GrowthHabit_Combinations_Use_Count AS e ON d.Tag = e.GHTag
-         WHERE a.Species <> 'GAP' AND 
-               d.Category = 'GrowthHabit' AND 
-               d.Use = 1 AND 
-               e.DurationCount > 1)
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the non-duration specific Species Tag Indicator. */
-SELECT RecKey, Method, SegType,
-       'Species Tag' AS IndicatorCategory,
-       'All' AS Duration,
-       c.Tag AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
- INNER JOIN SpeciesTags AS c ON b.SpeciesCode = c.SpeciesCode
- INNER JOIN Duration_SpeciesTags_Combinations_Use_Count AS d ON c.Tag = d.SpeciesTag
- WHERE Species <> 'GAP' AND d.DurationCount > 1
- GROUP BY RecKey, Method, SegType, IndicatorCategory, Duration, Indicator
-
- UNION ALL
-/* Provides the duration specific Species Tag Indicator. CodeTags used to filter and convert durations.*/
-SELECT RecKey, Method, SegType,
-       'Species Tag' AS IndicatorCategory,
-       d.Tag AS Duration, c.Tag AS Indicator,
-       Avg(Abs(SegStart - SegEnd) ) AS LengthMean,
-       Sum(Abs(SegStart - SegEnd) ) AS LengthSum,
-       Avg(Height) AS HeightMean,
-       Avg(ChkBox) AS ChkBoxMean
-  FROM LI_Detail_View AS a
- INNER JOIN tblSpecies AS b ON a.Species = b.SpeciesCode
- INNER JOIN SpeciesTags AS c ON a.Species = c.SpeciesCode
- INNER JOIN CodeTags AS d ON b.Duration = d.Code
- WHERE Species <> 'GAP' AND 
-       d.Category = 'Duration' AND 
-       d.Use = 1
- GROUP BY RecKey, Method, SegType, IndicatorCategory, d.Tag, c.Tag;
-			  
+ UNION
+SELECT y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator
+  FROM
+       (SELECT b.LineKey, a.Method, a.SegType, 'Species' AS IndicatorCategory, a.Duration, a.Indicator
+          FROM LI_Plot_Species AS a
+         INNER JOIN tblLines AS b ON a.PlotKey = b.PlotKey) AS x
+ INNER JOIN LI_Header_View AS y ON x.LineKey = y.LineKey AND x.Method = y.Method
+ GROUP BY y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator;
+ 
+--View: LI_Line_Indicators_Plot
+/* Creates a Plot/Method level set of indicators for later processing. Used to convert missind data to zeros later.*/
+CREATE VIEW LI_Line_Indicators_Plot AS
+SELECT z.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator
+FROM  (SELECT * 
+         FROM (SELECT d.PlotKey, 
+                       (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+                       a.Method, a.SegType, a.IndicatorCategory, a.Duration, a.Indicator
+                 FROM LI_LineSum AS a
+                INNER JOIN LI_Header_View AS b ON a.RecKey = b.RecKey
+                INNER JOIN tblLines AS c ON b.LineKey = c.LineKey
+                INNER JOIN tblPlots AS d ON c.PlotKey = d.PlotKey
+               ) AS a
+        GROUP BY PlotKey, Season, Method, SegType, IndicatorCategory, Duration, Indicator
+      ) AS x
+ INNER JOIN tblLines AS y ON x.PlotKey = y.PlotKey
+ INNER JOIN LI_Header_View AS z ON y.LineKey = z.LineKey
+ GROUP BY z.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator;
+		  
 -- View: LI_LineSum_Indicators
 /* Joins full indicator list for LI with existing Line data. Replaces NULL Lengths with zeros. */
 CREATE VIEW LI_LineSum_Indicators AS
@@ -1013,7 +788,7 @@ SELECT a.RecKey, a.Method, a.IndicatorCategory, a.Duration, a.Indicator, a.SegTy
             ELSE b.LengthSum END AS LengthSum,
        b.HeightMean,
        b.ChkBoxMean
-  FROM LI_Line_IndicatorsCartesian AS a
+  FROM LI_Line_Indicators_Plot AS a
   LEFT JOIN LI_LineSum AS b ON a.RecKey = b.RecKey AND 
                               a.Method = b.Method AND
                               a.IndicatorCategory = b.IndicatorCategory AND 
@@ -3635,259 +3410,126 @@ CREATE VIEW SR_Line AS
 -- View: SR_Line_Count
 /* Provides a count of unique species/species categories per line. Separate UNION statements provide individual indicators. */
 CREATE VIEW SR_Line_Count AS
-    -- Species
-	SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           SiteName,
-           PlotID,
-           LineID,
-           FormDate,
-           'Species' AS IndicatorCategory,
-           Duration,
-           SpeciesName AS Indicator,
-           1 AS Species_n
-      FROM SR_List_Line
-    UNION
-	-- Growth Habit (GrowthHabitSub). Duration specific. Uses CodeTags to convert durations and growth habits.
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.SiteName,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           'Growth Habit' AS IndicatorCategory,
-           b.Tag AS Duration,
-           c.Tag AS Indicator,
-           Count(SpeciesCode) AS Species_n
-      FROM SR_List_Line AS a
-           JOIN
-           CodeTags AS b ON a.Duration = b.Code
-           JOIN
-           CodeTags AS c ON a.GrowthHabitSub = c.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use AS d ON b.Tag = d.DurationTag AND 
-                                                            c.Tag = d.GHTag
-     WHERE b.Category = 'Duration' AND 
-           c.Category = 'GrowthHabitSub'
-     GROUP BY a.RecKey,
-              Duration,
-              Indicator
-    UNION
-	--Growth Habit (GrowthHabitSub). Duration non-specific. Uses CodeTags to convert growth habits.
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.SiteName,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           'Growth Habit' AS IndicatorCategory,
-           'All' AS Duration,
-           b.Tag AS Indicator,
-           Count(SpeciesCode) AS Species_n
-      FROM SR_List_Line AS a
-           JOIN
-           CodeTags AS b ON a.GrowthHabitSub = b.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS c ON b.Tag = c.GHTag
-     WHERE b.Category = 'GrowthHabitSub' AND 
-           c.GHCount > 1
-     GROUP BY a.RecKey,
-              Indicator
-    UNION
-	-- Lignification (GrowthHabit). Duration specific. Uses CodeTags to convert durations and growth habits.
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.SiteName,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           'Lignification' AS IndicatorCategory,
-           b.Tag AS Duration,
-           c.Tag AS Indicator,
-           Count(SpeciesCode) AS Species_n
-      FROM SR_List_Line AS a
-           JOIN
-           CodeTags AS b ON a.Duration = b.Code
-           JOIN
-           CodeTags AS c ON a.GrowthHabit = c.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use AS d ON b.Tag = d.DurationTag AND 
-                                                         c.Tag = d.GHTag
-     WHERE b.Category = 'Duration' AND 
-           c.Category = 'GrowthHabit'
-     GROUP BY a.RecKey,
-              Duration,
-              Indicator
-    UNION
-	-- Lignification (GrowthHabit). Duration non-specific. Uses CodeTags to convert growth habits.
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.SiteName,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           'Lignification' AS IndicatorCategory,
-           'All' AS Duration,
-           b.Tag AS Indicator,
-           Count(SpeciesCode) AS Species_n
-      FROM SR_List_Line AS a
-           JOIN
-           CodeTags AS b ON a.GrowthHabit = b.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS c ON b.Tag = c.GHTag
-     WHERE b.Category = 'GrowthHabit' AND 
-           c.DurationCount > 1
-     GROUP BY a.RecKey,
-              Indicator
-    UNION
-	-- Species Tag. Duration specific. Uses CodeTags to convert durations.
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.SiteName,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           'Species Tag' AS IndicatorCategory,
-           b.Tag AS Duration,
-           c.Tag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_List_Line AS a
-           JOIN
-           CodeTags AS b ON a.Duration = b.Code
-           JOIN
-           SpeciesTags AS c ON a.SpeciesCode = c.SpeciesCode
-           JOIN
-           Duration_SpeciesTags_Combinations_Use AS d ON b.Tag = d.DurationTag AND 
-                                                         c.Tag = d.SpeciesTag
-     WHERE b.Category = 'Duration'
-     GROUP BY a.RecKey,
-              Duration,
-              Indicator
-    UNION
-	-- Species Tag. Duration non-specific.
-    SELECT a.SiteKey,
-           a.PlotKey,
-           a.LineKey,
-           a.RecKey,
-           a.SiteID,
-           a.SiteName,
-           a.PlotID,
-           a.LineID,
-           a.FormDate,
-           'Species Tag' AS IndicatorCategory,
-           'All' AS Duration,
-           b.Tag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_List_Line AS a
-           JOIN
-           SpeciesTags AS b ON a.SpeciesCode = b.SpeciesCode
-           JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
-     WHERE c.DurationCount > 1
-     GROUP BY a.RecKey,
-              Indicator
-    UNION
-	-- Total
-    SELECT SiteKey,
-           PlotKey,
-           LineKey,
-           RecKey,
-           SiteID,
-           SiteName,
-           PlotID,
-           LineID,
-           FormDate,
-           'Total' AS IndicatorCategory,
-           'NA' AS Duration,
-           'Total' AS Indicator,
-           Count(SpeciesCode) AS Species_n
-      FROM SR_List_Line
-     GROUP BY RecKey
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              IndicatorCategory,
-              Duration,
-              Indicator;
+SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, FormDate,
+       'Species' AS IndicatorCategory,
+       Duration,
+       SpeciesName AS Indicator,
+       1 AS Species_n
+  FROM SR_List_Line
+
+ UNION
+-- Growth Habit (GrowthHabitSub). Duration specific. Uses CodeTags to convert durations and growth habits.
+SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, FormDate,
+       IndicatorCategory, Duration, Indicator, 
+       Count(SpeciesCode) AS Species_n
+  FROM (SELECT a.SiteKey, a.PlotKey, a.LineKey, a.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, a.FormDate,
+               'Growth Habit' AS IndicatorCategory, b.Tag AS Duration, c.Tag AS Indicator, a.SpeciesCode
+          FROM SR_List_Line AS a
+         INNER JOIN CodeTags AS b ON a.Duration = b.Code
+         INNER JOIN CodeTags AS c ON a.GrowthHabitSub = c.Code
+         INNER JOIN Duration_GrowthHabitSub_Combinations_Use AS d ON b.Tag = d.DurationTag AND c.Tag = d.GHTag
+         WHERE b.Category = 'Duration' AND c.Category = 'GrowthHabitSub')
+ GROUP BY RecKey, Duration, Indicator
+
+ UNION
+--Growth Habit (GrowthHabitSub). Duration non-specific. Uses CodeTags to convert growth habits.
+SELECT a.SiteKey, a.PlotKey, a.LineKey, a.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, a.FormDate,
+       'Growth Habit' AS IndicatorCategory,
+       'All' AS Duration,
+       b.Tag AS Indicator,
+       Count(SpeciesCode) AS Species_n
+  FROM SR_List_Line AS a
+ INNER JOIN CodeTags AS b ON a.GrowthHabitSub = b.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS c ON b.Tag = c.GHTag
+ WHERE b.Category = 'GrowthHabitSub' AND c.GHCount > 1
+ GROUP BY a.RecKey, Indicator
+
+ UNION
+-- Lignification (GrowthHabit). Duration specific. Uses CodeTags to convert durations and growth habits.
+SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, FormDate,
+       IndicatorCategory, Duration, Indicator, Count(SpeciesCode) As Species_n
+  FROM (SELECT a.SiteKey, a.PlotKey, a.LineKey, a.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, a.FormDate,
+               'Lignification' AS IndicatorCategory, b.Tag AS Duration, c.Tag AS Indicator, a.SpeciesCode
+          FROM SR_List_Line AS a
+         INNER JOIN CodeTags AS b ON a.Duration = b.Code
+         INNER JOIN CodeTags AS c ON a.GrowthHabit = c.Code
+         INNER JOIN Duration_GrowthHabit_Combinations_Use AS d ON b.Tag = d.DurationTag AND c.Tag = d.GHTag
+         WHERE b.Category = 'Duration' AND c.Category = 'GrowthHabit')
+ GROUP BY RecKey, Duration, Indicator
+
+ UNION
+-- Lignification (GrowthHabit). Duration non-specific. Uses CodeTags to convert growth habits.
+SELECT a.SiteKey, a.PlotKey, a.LineKey, a.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, a.FormDate,
+       'Lignification' AS IndicatorCategory,
+       'All' AS Duration,
+       b.Tag AS Indicator,
+       Count(SpeciesCode) AS Species_n
+  FROM SR_List_Line AS a
+ INNER JOIN CodeTags AS b ON a.GrowthHabit = b.Code
+ INNER JOIN Duration_GrowthHabit_Combinations_Use_Count AS c ON b.Tag = c.GHTag
+ WHERE b.Category = 'GrowthHabit' AND c.DurationCount > 1
+ GROUP BY a.RecKey, Indicator
+
+ UNION
+-- Species Tag. Duration specific. Uses CodeTags to convert durations.
+SELECT a.SiteKey, a.PlotKey, a.LineKey, a.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, a.FormDate,
+       'Species Tag' AS IndicatorCategory,
+       b.Tag AS Duration,
+       c.Tag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_List_Line AS a
+ INNER JOIN CodeTags AS b ON a.Duration = b.Code
+ INNER JOIN SpeciesTags AS c ON a.SpeciesCode = c.SpeciesCode
+ INNER JOIN Duration_SpeciesTags_Combinations_Use AS d ON b.Tag = d.DurationTag AND c.Tag = d.SpeciesTag
+ WHERE b.Category = 'Duration'
+ GROUP BY a.RecKey, Duration, Indicator
+
+ UNION
+-- Species Tag. Duration non-specific.
+SELECT a.SiteKey, a.PlotKey, a.LineKey, a.RecKey, a.SiteID, a.SiteName, a.PlotID, a.LineID, a.FormDate,
+       'Species Tag' AS IndicatorCategory,
+       'All' AS Duration,
+       b.Tag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_List_Line AS a
+ INNER JOIN SpeciesTags AS b ON a.SpeciesCode = b.SpeciesCode
+ INNER JOIN Duration_SpeciesTags_Combinations_Use_Count AS c ON b.Tag = c.SpeciesTag
+ WHERE c.DurationCount > 1
+ GROUP BY a.RecKey, Indicator
+
+ UNION
+-- Total
+SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, FormDate,
+       'Total' AS IndicatorCategory,
+       'NA' AS Duration,
+       'Total' AS Indicator,
+       Count(SpeciesCode) AS Species_n
+  FROM SR_List_Line
+ GROUP BY RecKey;
 			  
 -- View: SR_Line_Mean
 /* Provides the mean number of species found per line.  Each UNIONED statement provides a separate indicator. Urilizes SR_SubPlot for the core 
 of the workload. */
 CREATE VIEW SR_Line_Mean AS
-    --
-	SELECT x.*,
-           Count(y.subPlotID) AS subPlot_n,
-           Avg(CASE WHEN y.Species_n IS NULL THEN 0 ELSE y.Species_n END) AS MeanSpecies_n
-      FROM (
-               SELECT a.*,
-                      b.IndicatorCategory,
-                      b.Duration,
-                      b.Indicator
-                 FROM (
-                          SELECT SiteKey,
-                                 PlotKey,
-                                 LineKey,
-                                 RecKey,
-                                 SiteID,
-                                 SiteName,
-                                 PlotID,
-                                 LineID,
-                                 FormDate,
-                                 subPlotID
-                            FROM SR_SubPlot
-                           GROUP BY RecKey,
-                                    subPlotID
-                      )
-                      AS a
-                      JOIN
-                      (
-                          SELECT RecKey,
-                                 IndicatorCategory,
-                                 Duration,
-                                 Indicator
-                            FROM SR_SubPlot
-                           GROUP BY RecKey,
-                                    IndicatorCategory,
-                                    Duration,
-                                    Indicator
-                      )
-                      AS b ON a.RecKey = b.RecKey
-           )
-           AS x
-           LEFT JOIN
-           SR_SubPlot AS y ON x.RecKey = y.RecKey AND 
-                              x.subPlotID = y.subPlotID AND 
-                              x.Duration = y.Duration AND 
-                              x.Indicator = y.Indicator
-     GROUP BY x.RecKey,
-              x.Duration,
-              x.Indicator
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              IndicatorCategory,
-              Duration,
-              Indicator;
+SELECT x.*,
+       Count(y.subPlotID) AS subPlot_n,
+       Avg(CASE WHEN y.Species_n IS NULL THEN 0 ELSE y.Species_n END) AS MeanSpecies_n
+  FROM (SELECT a.*, b.IndicatorCategory, b.Duration, b.Indicator
+          FROM (SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, FormDate, subPlotID
+                  FROM SR_SubPlot
+                 GROUP BY RecKey, subPlotID)
+            AS a
+         INNER JOIN 
+               (SELECT RecKey, IndicatorCategory, Duration, Indicator
+                  FROM SR_SubPlot
+                 GROUP BY RecKey, IndicatorCategory, Duration, Indicator)
+            AS b ON a.RecKey = b.RecKey)
+    AS x
+  LEFT JOIN SR_SubPlot AS y ON x.RecKey = y.RecKey AND 
+                               x.subPlotID = y.subPlotID AND 
+                               x.Duration = y.Duration AND 
+                               x.Indicator = y.Indicator
+ GROUP BY x.RecKey, x.Duration, x.Indicator;
 			  
 -- View: SR_List_Line
 /* Creates a list of Species Richness species found specifically within each line.*/
@@ -4359,409 +4001,181 @@ CREATE VIEW SR_Raw_Final AS
 /* Provides sprecies richness count information for each species/category for each subplot.  Each UNIONED statement provides 
 a separate indicator. */
 CREATE VIEW SR_SubPlot AS
-	-- Species.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.subPlotID,
-           'Species' AS IndicatorCategory,
-           CASE WHEN g.Duration IS NULL THEN 'NA' ELSE g.Duration END AS Duration,
-           CASE WHEN (g.ScientificName) IS NULL THEN a.SpeciesCode ELSE g.ScientificName END AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-     WHERE c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.subPlotID,
-              g.ScientificName
-    UNION
-	-- Growth Habit (GrowthHabitSub). Duration specific. Uses CodeTags to convert durations and growth habits.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.subPlotID,
-           'Growth Habit' AS IndicatorCategory,
-           k.DurationTag AS Duration,
-           k.GHTag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
-           LEFT JOIN
-           CodeTags AS i ON g.Duration = i.Code
-           LEFT JOIN
-           CodeTags AS j ON h.GrowthHabitSub = j.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use AS k ON j.Tag = k.GHTag AND 
-                                                            i.Tag = k.DurationTag
-     WHERE i.Category = 'Duration' AND 
-           j.Category = 'GrowthHabitSub' AND 
-           c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.subPlotID,
-              k.GHTag,
-              k.DurationTag
-    UNION
-	-- Growth Habit (GrowthHabitSub). Duration non-specific. Uses CodeTags to convert growth habits.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.subPlotID,
-           'Growth Habit' AS IndicatorCategory,
-           'All' AS Duration,
-           k.GHTag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
-           LEFT JOIN
-           CodeTags AS j ON h.GrowthHabitSub = j.Code
-           JOIN
-           Duration_GrowthHabitSub_Combinations_Use_Count AS k ON j.Tag = k.GHTag
-     WHERE j.Category = 'GrowthHabitSub' AND 
-           k.GHCount > 1 AND 
-           c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.subPlotID,
-              k.GHTag
-    UNION
-	-- Lignification (GrowthHabit). Duration specific. Uses CodeTags to convert durations and growth habits.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.SubPlotID,
-           'Lignification' AS IndicatorCategory,
-           k.DurationTag AS Duration,
-           k.GHTag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
-           LEFT JOIN
-           CodeTags AS i ON g.Duration = i.Code
-           LEFT JOIN
-           CodeTags AS j ON h.GrowthHabit = j.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use AS k ON j.Tag = k.GHTag AND 
-                                                         i.Tag = k.DurationTag
-     WHERE i.Category = 'Duration' AND 
-           j.Category = 'GrowthHabit' AND 
-           c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.SubPlotID,
-              k.GHTag,
-              k.DurationTag
-    UNION
-	-- Lignification (GrowthHabit). Duration non-specific. Uses CodeTags to convert growth habits.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.SubPlotID,
-           'Lignification' AS IndicatorCategory,
-           'All' AS Duration,
-           k.GHTag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-           LEFT JOIN
-           tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
-           LEFT JOIN
-           CodeTags AS j ON h.GrowthHabit = j.Code
-           JOIN
-           Duration_GrowthHabit_Combinations_Use_Count AS k ON j.Tag = k.GHTag
-     WHERE j.Category = 'GrowthHabit' AND 
-           k.DurationCount > 1 AND 
-           c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.SubPlotID,
-              k.GHTag
-    UNION
-	-- Species Tag. Duration specific. Uses CodeTags to convert durations.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.SubPlotID,
-           'Species Tag' AS IndicatorCategory,
-           g.Duration AS Duration,
-           h.Tag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-           JOIN
-           SpeciesTags AS h ON a.SpeciesCode = h.SpeciesCode
-           LEFT JOIN
-           CodeTags AS i ON g.Duration = i.Code
-           JOIN
-           Duration_SpeciesTags_Combinations_Use AS k ON h.Tag = k.SpeciesTag AND 
-                                                         i.Tag = k.DurationTag
-     WHERE i.Category = 'Duration' AND 
-           c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.SubPlotID,
-              h.Tag,
-              g.Duration
-    UNION
-	-- Species Tag. Duration non-specific.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.SubPlotID,
-           'Species Tag' AS IndicatorCategory,
-           'All' AS Duration,
-           h.Tag AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-           JOIN
-           SpeciesTags AS h ON a.SpeciesCode = h.SpeciesCode
-           JOIN
-           Duration_SpeciesTags_Combinations_Use_Count AS k ON h.Tag = k.SpeciesTag
-     WHERE k.DurationCount > 1 AND 
-           c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.SubPlotID,
-              h.Tag
-    UNION
-	-- Total.
-    SELECT f.SiteKey AS SiteKey,
-           e.PlotKey AS PlotKey,
-           d.LineKey AS Linekey,
-           a.RecKey AS RecKey,
-           f.SiteID AS SiteID,
-           f.SiteName AS SiteName,
-           e.PlotID AS PlotID,
-           d.LineID AS LineID,
-           c.FormDate AS FormDate,
-           a.subPlotID,
-           'Total' AS IndicatorCategory,
-           'NA' AS Duration,
-           'Total' AS Indicator,
-           Count(a.SpeciesCode) AS Species_n
-      FROM SR_Raw AS a
-           JOIN
-           tblSpecRichHeader AS c ON a.RecKey = c.RecKey
-           JOIN
-           tblLines AS d ON c.LineKey = d.LineKey
-           JOIN
-           tblPlots AS e ON d.PlotKey = e.PlotKey
-           JOIN
-           tblSites AS f ON e.SiteKey = f.SiteKey
-           JOIN
-           tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
-     WHERE c.FormDate BETWEEN (
-                                  SELECT StartDate
-                                    FROM Data_DateRange
-                                   WHERE rowid = 1
-                              )
-           AND (
-                   SELECT EndDate
-                     FROM Data_DateRange
-                    WHERE rowid = 1
-               )
-     GROUP BY f.SiteKey,
-              e.PlotKey,
-              d.LineKey,
-              a.RecKey,
-              a.subPlotID
-     ORDER BY SiteID,
-              PlotID,
-              LineID,
-              FormDate,
-              a.SubPlotID,
-              IndicatorCategory,
-              Indicator;
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.subPlotID,
+       'Species' AS IndicatorCategory,
+       CASE WHEN g.Duration IS NULL THEN 'NA' ELSE g.Duration END AS Duration,
+       CASE WHEN (g.ScientificName) IS NULL THEN a.SpeciesCode ELSE g.ScientificName END AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+ WHERE c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.subPlotID, g.ScientificName
+
+ UNION
+-- Growth Habit (GrowthHabitSub). Duration specific. Uses CodeTags to convert durations and growth habits.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.subPlotID,
+       'Growth Habit' AS IndicatorCategory,
+       k.DurationTag AS Duration,
+       k.GHTag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
+  LEFT JOIN CodeTags AS i ON g.Duration = i.Code
+  LEFT JOIN CodeTags AS j ON h.GrowthHabitSub = j.Code
+ INNER JOIN Duration_GrowthHabitSub_Combinations_Use AS k ON j.Tag = k.GHTag AND i.Tag = k.DurationTag
+ WHERE i.Category = 'Duration' AND 
+       j.Category = 'GrowthHabitSub' AND 
+       c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND 
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.subPlotID, k.GHTag, k.DurationTag
+
+ UNION
+-- Growth Habit (GrowthHabitSub). Duration non-specific. Uses CodeTags to convert growth habits.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.subPlotID,
+       'Growth Habit' AS IndicatorCategory,
+       'All' AS Duration,
+       k.GHTag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+  INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+  INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+  INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+  INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+  INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+   LEFT JOIN tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
+   LEFT JOIN CodeTags AS j ON h.GrowthHabitSub = j.Code
+  INNER JOIN Duration_GrowthHabitSub_Combinations_Use_Count AS k ON j.Tag = k.GHTag
+  WHERE j.Category = 'GrowthHabitSub' AND k.GHCount > 1 AND 
+        c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1)
+                       AND ( SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey,a.RecKey,a.subPlotID, k.GHTag
+
+ UNION
+-- Lignification (GrowthHabit). Duration specific. Uses CodeTags to convert durations and growth habits.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.SubPlotID,
+       'Lignification' AS IndicatorCategory,
+       k.DurationTag AS Duration,
+       k.GHTag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
+  LEFT JOIN CodeTags AS i ON g.Duration = i.Code
+  LEFT JOIN CodeTags AS j ON h.GrowthHabit = j.Code
+ INNER  JOIN Duration_GrowthHabit_Combinations_Use AS k ON j.Tag = k.GHTag AND i.Tag = k.DurationTag
+ WHERE i.Category = 'Duration' AND j.Category = 'GrowthHabit' AND 
+       c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND 
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.SubPlotID, k.GHTag, k.DurationTag
+
+ UNION
+-- Lignification (GrowthHabit). Duration non-specific. Uses CodeTags to convert growth habits.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.SubPlotID,
+       'Lignification' AS IndicatorCategory,
+       'All' AS Duration,
+       k.GHTag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+  LEFT JOIN tblSpeciesGrowthHabit AS h ON g.GrowthHabitCode = h.Code
+  LEFT JOIN CodeTags AS j ON h.GrowthHabit = j.Code
+ INNER JOIN Duration_GrowthHabit_Combinations_Use_Count AS k ON j.Tag = k.GHTag
+ WHERE j.Category = 'GrowthHabit' AND  k.DurationCount > 1 AND 
+       c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND 
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.SubPlotID, k.GHTag
+
+ UNION
+-- Species Tag. Duration specific. Uses CodeTags to convert durations.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.SubPlotID,
+       'Species Tag' AS IndicatorCategory,
+       g.Duration AS Duration,
+       h.Tag AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+ INNER JOIN SpeciesTags AS h ON a.SpeciesCode = h.SpeciesCode
+  LEFT JOIN CodeTags AS i ON g.Duration = i.Code
+ INNER JOIN Duration_SpeciesTags_Combinations_Use AS k ON h.Tag = k.SpeciesTag AND i.Tag = k.DurationTag
+ WHERE i.Category = 'Duration' AND 
+       c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND 
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.SubPlotID, h.Tag, g.Duration
+
+ UNION
+-- Species Tag. Duration non-specific.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.SubPlotID,
+       'Species Tag' AS IndicatorCategory,
+       'All' AS Duration,
+        h.Tag AS Indicator,
+        Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode
+ INNER JOIN SpeciesTags AS h ON a.SpeciesCode = h.SpeciesCode
+ INNER JOIN Duration_SpeciesTags_Combinations_Use_Count AS k ON h.Tag = k.SpeciesTag
+ WHERE k.DurationCount > 1 AND 
+       c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND 
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.SubPlotID, h.Tag
+
+UNION
+-- Total.
+SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
+       f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
+       c.FormDate AS FormDate, a.subPlotID,
+       'Total' AS IndicatorCategory,
+       'NA' AS Duration,
+       'Total' AS Indicator,
+       Count(a.SpeciesCode) AS Species_n
+  FROM SR_Raw AS a
+ INNER JOIN tblSpecRichHeader AS c ON a.RecKey = c.RecKey
+ INNER JOIN tblLines AS d ON c.LineKey = d.LineKey
+ INNER JOIN tblPlots AS e ON d.PlotKey = e.PlotKey
+ INNER JOIN tblSites AS f ON e.SiteKey = f.SiteKey
+ INNER JOIN tblSpecies AS g ON a.SpeciesCode = g.SpeciesCode 
+ WHERE c.FormDate BETWEEN (SELECT StartDate FROM Data_DateRange WHERE rowid = 1) AND 
+                          (SELECT EndDate FROM Data_DateRange WHERE rowid = 1)
+ GROUP BY f.SiteKey, e.PlotKey, d.LineKey, a.RecKey, a.subPlotID;
 			  
 -- View: SR_Tag
 /* Serves as the final product for species richness above plot level.  Combines data from SR_Tag_Count and SR_Tag_Mean. */

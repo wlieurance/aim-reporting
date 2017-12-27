@@ -274,6 +274,22 @@ CREATE TABLE IF NOT EXISTS Cover_Line
 	   Method TEXT, LineSize REAL, LineSizeUnits TEXT, Duration TEXT, IndicatorCategory TEXT, Indicator TEXT, HitCategory TEXT, 
 	   IndicatorSum INTEGER, CoverPct REAL, ChkPct REAL, PRIMARY KEY (RecKey, Method, Duration, Indicator, HitCategory ));
 
+--Table: LI_Line_IndicatorsCartesian
+/* Constructs a complete list of Line-Intercept indicators for each LI line. For use in later matching up existing data and 
+defining null data. */
+/*CREATE TABLE LI_Line_IndicatorsCartesian (RecKey TEXT,Method TEXT,SegType TEXT,IndicatorCategory TEXT,Duration TEXT, Indicator TEXT,
+								          PRIMARY KEY (RecKey, Method, SegType, IndicatorCategory, Duration, Indicator));*/
+
+-- LI_LineSum
+/* Serves as the primary calculator of final line totals/averages from raw line intercept detail data. See inside statement 
+for indivudual descriptions. */
+CREATE TABLE LI_LineSum (RecKey TEXT, Method TEXT, SegType TEXT, IndicatorCategory TEXT, Duration TEXT, Indicator TEXT, LengthMean REAL, LengthSum REAL, HeightMean REAL, ChkBoxMean REAL, PRIMARY KEY (RecKey, Method, SegType, IndicatorCategory, Indicator, Duration));
+
+--SR_Line
+/* Combines the output of SR_Line_Count and SR_Line_Mean into the final Species Richness line product. */
+CREATE TABLE SR_Line (SiteKey TEXT, PlotKey TEXT, LineKey TEXT, RecKey TEXT, SiteID TEXT, SiteName TEXT, PlotID TEXT,
+					  LineID TEXT, FormDate DATETIME, IndicatorCategory TEXT, Duration TEXT, Indicator TEXT, Species_n INTEGER,
+                      subPlot_n INTEGER, MeanSpecies_n REAL, PRIMARY KEY (RecKey, IndicatorCategory, Duration, Indicator));
 
 --Create Indexes
 --

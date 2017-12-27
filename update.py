@@ -15,39 +15,42 @@ from classes import stdevs, meanw, stdevw
 def run_sqlscript(conn, script_path, form = None, msg = None):
     if script_path == None:
         script_path = tkinter.filedialog.askopenfilename(title = "Choose SQL script to run on Database.", filetypes = (("SQL files", "*.sql"),("All files", "*.*")))
-    with open(script_path) as f:
-            script = f.read()
-    stmts = sqlparse.split(script)
+    if os.path.isfile(script_path):
+        with open(script_path) as f:
+                script = f.read()
+        stmts = sqlparse.split(script)
 
-    ### update messages
-    if msg != None:
-        print(msg)
-    if form != None:
-        form.lblAction['text'] = msg
-        form.lblAction.update_idletasks()
-        
-    ### initial values get the while loop to run at least once.
-    curlength = 1
-    pastlength = 2 
-    counter = 0
-    while curlength < pastlength and curlength > 0:
-        errors = []
-        counter += 1
-        #print("Script pass",str(counter))
-        pastlength = len(stmts)
-        for stmt in stmts:
-            try:
-                #print(stmt,'\n','------------------------------------------------------','\n','------------------------------------------------------')
-                conn.execute(stmt)
-                stmts = [x for x in stmts if x != stmt] #removes SQL statement from list if completed successfully]
-            except sqlite.OperationalError:
-                errors.append(stmt)
-        curlength = len(stmts)   
+        ### update messages
+        if msg != None:
+            print(msg)
+        if form != None:
+            form.lblAction['text'] = msg
+            form.lblAction.update_idletasks()
+            
+        ### initial values get the while loop to run at least once.
+        curlength = 1
+        pastlength = 2 
+        counter = 0
+        while curlength < pastlength and curlength > 0:
+            errors = []
+            counter += 1
+            #print("Script pass",str(counter))
+            pastlength = len(stmts)
+            for stmt in stmts:
+                try:
+                    #print(stmt,'\n','------------------------------------------------------','\n','------------------------------------------------------')
+                    conn.execute(stmt)
+                    stmts = [x for x in stmts if x != stmt] #removes SQL statement from list if completed successfully]
+                except sqlite.OperationalError:
+                    errors.append(stmt)
+            curlength = len(stmts)   
 
-    if len(stmts) == 0:
-        return (True, None)
+        if len(stmts) == 0:
+            return (True, None)
+        else:
+            return (False, stmts)
     else:
-        return (False, stmts)
+        return (False, None)
         
 def Update(var, form = None):
     RDpath = var['RDpath']
