@@ -9,6 +9,6 @@
 
 4. Implement more robust error catching.  Most failures at this point will just raise an exception, which is useful in debugging but not a good method for non-developers to understand why things failed.
 
-5. Implement more options for output. Currently MS Excel is only option.
+5. ~~Implement more options for output. Currently MS Excel is only option.~~**Adressed by adding CSC export option.**
 
 6. Create a simpler option for altering QC queries for different projects than altering full view definitions.  Possible options include some sort of variable lookup table or perhaps some sort of variable storage in a json file.
