@@ -1,7 +1,7 @@
 import os
 import sys
+import csv
 import sqlite3 as sqlite
-#import openpyxl
 import xlsxwriter
 import tkinter
 from tkinter import ttk, filedialog, messagebox #separate imports needed due to tkinter idiosyncrasies
@@ -43,6 +43,16 @@ class ExportForm:
 
         self.btnExport = ttk.Button(child, text='Export Selection', style="TButton", command=self.exportselection)
         self.btnExport.grid(row=2, column = 2)
+
+        self.lblExportOptions = ttk.Label(child, text="Export as: ")
+        self.lblExportOptions.grid(row=3, column = 0, sticky = "E")
+
+        self.exops = tkinter.IntVar(child)
+        self.exops.set(0)
+        self.rdoOption1 = tkinter.Radiobutton(child, text='excel', variable=self.exops, value=0, command=self.selected)
+        self.rdoOption1.grid(row=3, column = 1)
+        self.rdoOption2 = tkinter.Radiobutton(child, text='csv', variable=self.exops, value=1, command=self.selected)
+        self.rdoOption2.grid(row=3, column = 2)
 
         result = connection.execute("SELECT Category FROM Exports_All GROUP BY Category ORDER BY Category;")
         for row in result:
@@ -106,6 +116,9 @@ class ExportForm:
         self.lstDataType.bind('<<ListboxSelect>>', onselect_DataType)
         self.lstScale.bind('<<ListboxSelect>>', onselect_Scale)
 
+    def selected(self):
+        print("Option", str(self.exops.get()), "selected.")
+
     def selectall(self):
         self.lstCategory.select_set(0, tkinter.END)
         c = self.lstCategory.curselection()
@@ -151,21 +164,19 @@ class ExportForm:
                   ORDER BY Category, Scale, DataType, ExportName;"""
         sql = sql.format(','.join('?'*len(self.valueCat)), ','.join('?'*len(self.valueData)), ','.join('?'*len(self.valueScale)))
         result = self.connection.execute(sql, self.valueCat + self.valueData + self.valueScale)
-        path = tkinter.filedialog.asksaveasfilename(defaultextension = ".xlsx", title="Choose filename for export:", filetypes=(("Excel files", "*.xlsx"),("All files", "*.*")))
-        if os.path.isfile(path):
-            os.remove(path)
-        if path:
-            try:
-                ##workbook = openpyxl.Workbook() #openpyxl
+        if self.exops.get()==0: #excel
+            path = tkinter.filedialog.asksaveasfilename(defaultextension = ".xlsx", title="Choose filename for export:", filetypes=(("Excel files", "*.xlsx"),("All files", "*.*")))
+            if path:
+                if os.path.isfile(path):
+                    os.remove(path)
                 workbook = xlsxwriter.Workbook(path, {'constant_memory': True}) #xlsxwriter
+        elif self.exops.get()==1: #csv
+            path = tkinter.filedialog.askdirectory(initialdir = os.environ["HOME"] + '\\', mustexist = False, title="Select directory for export:")
+        if path:
+            try:   
                 exportEmpty = True # this checks to see if the user wants to export empty views/tables
                 asked = False # this keeps track of whether the user was asked to export blanks or not
                 for row in result:
-                    ### openpyxl
-                    #if os.path.isfile(path):    
-                    #    workbook = openpyxl.load_workbook(filename = path)
-                    #else:
-                    #    workbook = openpyxl.Workbook()
                     self.lblExport['text'] = "                                                                                          "
                     self.lblExport.update_idletasks()
                     self.lblExport['text'] = "Exporting " + row["ExportName"] + "..."
@@ -181,7 +192,6 @@ class ExportForm:
                     ### figures out how many rows are in a query to be exported and then creates the relevant recordset
                     ### unfortunately due to the size and complexity of some views this has produced MemoryError exceptions in the past.
                     ### still needs to be fixed if possible.
-                    #obj = row["ObjectName"]
                     rowcount = self.connection.execute("SELECT Count(*) FROM {!s};".format(obj)).fetchone()[0]
                     result2 = self.connection.execute("SELECT * FROM {!s};".format(obj))
 
@@ -191,41 +201,32 @@ class ExportForm:
                             asked = True
                     if rowcount > 0 or (rowcount == 0 and exportEmpty):
                         print("Exporting",row["ExportName"],"...")
-                        ### openpyxl
-                        #if os.path.isfile(path):
-                        #    worksheet = workbook.create_sheet(title=row["ExportName"])
-                        #else:
-                        #   worksheet = workbook.active
-                        #    worksheet.title = row["ExportName"]
-                        ### xlsxwriter
-                        worksheet = workbook.add_worksheet(row["ExportName"])
-                        colnames = [desc[0] for desc in result2.description]
-                        #worksheet.append(colnames)          ### openpyxl
-                        worksheet.write_row('A1', colnames) ### xlsxwriter
-                        rcount = 1
-                        for row2 in result2:
-                            rcount += 1
-                            d = dict(row2)
-                            for key, value in d.items(): #necessary in order to tell excel that strings starting with '=' are not formulas. Not an ideal result, could use tweaking.
-                                if isinstance(value, str):
-                                    if len(value) > 0:
-                                        if(value[0]=='='):
-                                            d[key]= ''.join(("'",value))
-                            ### openpyxl
-                            #worksheet.append(list(d.values()))
-                            ### xlsxwriter
-                            worksheet.write_row(''.join(('A',str(rcount))), list(d.values()))
-                        ### openpyxl
-                        #try:
-                        #    workbook.save(path)
-                        #except (ValueError, MemoryError):
-                        #    print(rcount, d)
-                        #    print("Unexpected error:", sys.exc_info()[0])
-                        #    raise
+                        if self.exops.get()==0: #excel
+                            worksheet = workbook.add_worksheet(row["ExportName"])
+                            colnames = [desc[0] for desc in result2.description]
+                            worksheet.write_row('A1', colnames)
+                            rcount = 1
+                            for row2 in result2:
+                                rcount += 1
+                                d = dict(row2)
+                                for key, value in d.items(): #necessary in order to tell excel that strings starting with '=' are not formulas. Not an ideal result, could use tweaking.
+                                    if isinstance(value, str):
+                                        if len(value) > 0:
+                                            if(value[0]=='='):
+                                                d[key]= ''.join(("'",value))
+                                worksheet.write_row(''.join(('A',str(rcount))), list(d.values()))
+                        elif self.exops.get()==1: #csv
+                            with open(os.path.join(path, row["ExportName"] + '.csv'), 'w', newline='', encoding='utf-8') as csvfile:
+                                colnames = [desc[0] for desc in result2.description]
+                                writer = csv.DictWriter(csvfile, fieldnames=colnames, quoting=csv.QUOTE_NONNUMERIC, delimiter='|', quotechar='"')
+                                writer.writeheader()
+                                for row2 in result2:
+                                    d = dict(row2)
+                                    writer.writerow(d)
                     else:
                         print("Skipping",row["ExportName"],"...")
-                ### xlsxwriter
-                workbook.close()
+                if self.exops.get()==0: #excel
+                    workbook.close()
                 print("Finished Exporting.")
                 tkinter.messagebox.showinfo("Success", "Export complete.")
                 self.lblExport['text'] = "Export:"
@@ -235,11 +236,10 @@ class ExportForm:
             except PermissionError:
                 tkinter.messagebox.showinfo("Error", "Could not access" + os.linesep + path + os.linesep +"File may be in use.")
             except MemoryError:
-                workbook.close() #xlsxwriter
+                #workbook.close() #xlsxwriter
                 tkinter.messagebox.showinfo("Error", "Out of Memory. Please try again with fewer selections.")
                 #raise
-                
-
+            
 def Export(RDpath, root, form = None):
     dirpath = os.path.dirname(RDpath)
     dbname = os.path.basename(RDpath)
