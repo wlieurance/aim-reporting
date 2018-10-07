@@ -67,5 +67,5 @@ Currently there are a number of tables in the database that may need to be popul
 ### COMMON INSTALL ISSUES
 * Linux users may need to install the additional packages if the install of pyodbc fails. Check the [pyodbc wiki](https://github.com/mkleehammer/pyodbc/wiki/Install) for more information.
 * If the following error occurs: "AttributeError: 'sqlite3.Connection' object has no attribute 'enable_load_extension'" then most likely your python installation needs to be built from source again with the '--enable-loadable-sqlite-extensions' flag.
-* Ubuntu/Mint/Debian users should be able to install the 'libsqlite3-mod-SpatiaLite' package for the SpatiaLite extension.  Those looking to build SpatiaLite from source might try the following packages for the prerequisites listed in the SpatiaLite README file: libsqlite3-dev, libproj-dev, libgeos-dev, and libfreexl-dev.
+* Ubuntu/Mint/Debian users should be able to install the 'libsqlite3-mod-spatialite' package for the SpatiaLite extension.  Those looking to build SpatiaLite from source might try the following packages for the prerequisites listed in the SpatiaLite README file: libsqlite3-dev, libproj-dev, libgeos-dev, and libfreexl-dev.
 Building prerequisites from source is always an option.
