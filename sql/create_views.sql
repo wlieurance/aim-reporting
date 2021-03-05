@@ -3,7 +3,7 @@ BEGIN TRANSACTION;
 
 -- View: CodeTags_CodeCount
 /* Counts the number of Tags for each Category and Tag. Used for the Duration_GrowthHabit_Combinations type Views. */
-CREATE VIEW CodeTags_CodeCount AS
+CREATE VIEW IF NOT EXISTS CodeTags_CodeCount AS
     SELECT Category,
            Tag,
            Count(Code) AS CodeCount
@@ -15,7 +15,7 @@ CREATE VIEW CodeTags_CodeCount AS
 			  
 -- View: CodeTags_Grouped
 /* Similar to CodeTags_CodeCount but restricts results to only Use = 1 tags. Used for the LPI_Line_IndicatorsCartesian view. */
-CREATE VIEW CodeTags_Grouped AS
+CREATE VIEW IF NOT EXISTS CodeTags_Grouped AS
     SELECT Category,
            Tag
       FROM CodeTags
@@ -28,49 +28,23 @@ CREATE VIEW CodeTags_Grouped AS
 -- View: Cover_Plot
 /* The final Plot level product for Cover. Gets cover information from LPI and LI penultimate products. Uses Seasons to delineate multiple 
  samples of the same plots. */
-CREATE VIEW Cover_Plot AS
-    SELECT SiteKey,
-           PlotKey,
-           SiteID,
-           PlotID,
-           (
-               SELECT SeasonLabel
-                 FROM SeasonDefinition
-                WHERE FormDate BETWEEN SeasonStart AND SeasonEnd
-           )
-           AS Season,
-           Method,
-           Duration,
-           IndicatorCategory,
-           Indicator,
-           HitCategory,
-           Count(LineKey) AS Line_n,
-           Avg(CoverPct) AS CoverPctMean,
-           stdev(CoverPct) AS CoverPctSD,
-           Avg(ChkPct) AS ChkPctMean,
-           stdev(ChkPct) AS ChkPctSD
-      FROM Cover_Line
-     GROUP BY SiteKey,
-              PlotKey,
-              Season,
-              Method,
-              Duration,
-              IndicatorCategory,
-              Indicator,
-              HitCategory
-     ORDER BY SiteID,
-              PlotID,
-              Season,
-              Method,
-              IndicatorCategory,
-              Indicator,
-              HitCategory,
-              Duration;
+CREATE VIEW IF NOT EXISTS Cover_Plot AS
+SELECT SiteKey, PlotKey, SiteID, PlotID,
+      (SELECT SeasonLabel FROM SeasonDefinition WHERE FormDate BETWEEN SeasonStart AND SeasonEnd) AS Season,
+       Method, Duration, IndicatorCategory, Indicator, HitCategory,
+       Count(LineKey) AS Line_n, Avg(CoverPct) AS CoverPctMean,
+       stdev(CoverPct) AS CoverPctSD, Avg(ChkPct) AS ChkPctMean,
+       stdev(ChkPct) AS ChkPctSD
+  FROM Cover_Line
+ GROUP BY SiteKey, PlotKey, Season, Method, Duration,
+          IndicatorCategory, Indicator, HitCategory
+ ORDER BY SiteID, PlotID, Season, Method, IndicatorCategory,
+          Indicator, HitCategory, Duration;
 			  
 -- View: Cover_Tag
 /* Final product for Cover on the above-plot level. Uses weighted mean and standard deviation functions given in the classes.py file. 
 Missing cover values are replaced by a zero. Missing Chkbox values remain NULL. */
-CREATE VIEW Cover_Tag AS
+CREATE VIEW IF NOT EXISTS Cover_Tag AS
 SELECT Tag, Method, Duration, IndicatorCategory, Indicator, HitCategory,
        count(CoverPctMean) AS cover_n, meanw(CoverPctMean, Weight) AS CoverPctMean, stdevw(CoverPctMean, Weight) AS CoverPctSD,
        count(ChkPctMean) AS chk_n, meanw(ChkPctMean, Weight) AS ChkPctMean, stdevw(ChkPctMean, Weight) AS ChkPctSD
@@ -92,7 +66,7 @@ SELECT Tag, Method, Duration, IndicatorCategory, Indicator, HitCategory,
 			  
 -- View: Dimensions_Line
 /* The final Line level product for Dimension. Gets dimension information from LPI and LI penultimate products. */
-CREATE VIEW Dimensions_Line AS
+CREATE VIEW IF NOT EXISTS Dimensions_Line AS
 SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID, a.LineID, b.FormDate, b.Method, 
        b.HitCategory AS MethodCategory, 
        b.LineSize, LineSizeUnits, Duration, IndicatorCategory, Indicator, 
@@ -120,7 +94,7 @@ SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, PlotID, LineID, FormDate, Meth
 -- View: Dimensions_Plot
 /* The final Plot level product for Dimension. Gets dimension information from LPI and LI penultimate products. Uses Seasons to delineate multiple 
  samples of the same plots. */
-CREATE VIEW Dimensions_Plot AS
+CREATE VIEW IF NOT EXISTS Dimensions_Plot AS
     SELECT a.SiteKey,
            a.PlotKey,
            a.SiteID,
@@ -164,7 +138,7 @@ CREATE VIEW Dimensions_Plot AS
 			  
 -- View: Dimensions_Tag
 /* Final product for Dimension on the above-plot level. Uses weighted mean and standard deviation functions given in the classes.py file. */
-CREATE VIEW Dimensions_Tag AS
+CREATE VIEW IF NOT EXISTS Dimensions_Tag AS
     SELECT a.Tag,
            b.Method,
            b.MethodCategory,
@@ -200,7 +174,7 @@ Assumes that the Duration_GrowthHabit_Combinations table is populated. This meth
 versions of this methodology because it assumes that there are no combinationCodeTags for the GrowthHabit codes woody and non-woody 
 (e.g. Woody_Non-woody). If this were to change in the future, then this methodology would have to be altered to reflect the 
 GrowthHabitSub version. It was left this way for simplicity, and because future Tags of this sort seem unlikely to be needed.*/
-CREATE VIEW Duration_GrowthHabit_Combinations_ghTags AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabit_Combinations_ghTags AS
     SELECT a.GrowthHabit AS GHTag,
            b.Tag AS DurationTag,
            b.Use,
@@ -218,7 +192,7 @@ CREATE VIEW Duration_GrowthHabit_Combinations_ghTags AS
 -- View: Duration_GrowthHabit_Combinations_Use
 /* Filters out any combinations of Duration and GrowthHabit that are not valid. In practice this is likely to be none.  For a better example 
 of how this methodology is supposed to work, see the Duration_GrowthHabitSub_Combinations_Final view description. */
-CREATE VIEW Duration_GrowthHabit_Combinations_Use AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabit_Combinations_Use AS
     SELECT a.*,
            b.CodeCount,
            (TagCount / CodeCount) AS TagUse
@@ -231,7 +205,7 @@ CREATE VIEW Duration_GrowthHabit_Combinations_Use AS
 /* Provides a simple and easy to utilize list of valid GrowthHabits where Duration is not being considered. Also provides a way to parse out 
 which GrowthHabits need to be in queries that construct an 'All' duration.  If a GrowthHabit has a duration count of 1, it is left out of 
 constructors of the 'All' duration because identical data exists for it in the duration specific version of that query.*/
-CREATE VIEW Duration_GrowthHabit_Combinations_Use_Count AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabit_Combinations_Use_Count AS
     SELECT GHTag,
            Count(DurationTag) AS DurationCount
       FROM Duration_GrowthHabit_Combinations_Use
@@ -241,7 +215,7 @@ CREATE VIEW Duration_GrowthHabit_Combinations_Use_Count AS
 -- View: Duration_GrowthHabitSub_Combinations_AllTags
 /* Passes the results from Duration_GrowthHabitSub_Combinations_ghTags through CodeTags, providing duration code tags. This results in 
 all combinations of GrowthHabitSub (and all of its Tags) and Duration (and all of its Tags). */
-CREATE VIEW Duration_GrowthHabitSub_Combinations_AllTags AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabitSub_Combinations_AllTags AS
     SELECT a.GHTag,
            b.Tag AS DurationTag,
            Count(b.Tag) AS DurationTagCount
@@ -263,7 +237,7 @@ the Count of that duration in CodeTags and that duration's Count in Duration_Gro
 If the 'DurationTagCount' is < the 'CodeCount' then one of the amalgamated durations from CodeTags is not proper for this growth habit and we can remove 
 it (UseDurationTag must equal 1). This convoluted methodology is only necessary due to the use of the CodeTag table to amalgumate durations together. 
 Without the CodeTags table introducing complexity (and also useful functionality) we could just use the Duration_GrowthHabit_Combinations table directly. */
-CREATE VIEW Duration_GrowthHabitSub_Combinations_Final AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabitSub_Combinations_Final AS
     SELECT a.*,
            b.CodeCount,
            (a.DurationTagCount / b.CodeCount) AS UseDurationTag
@@ -278,7 +252,7 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_Final AS
 /* Used as an intial way to construct viable combinations of Durations and GrowthHabitSubs (after those growth habits have passed through the 
 CodeTags table for conversion, i.e includes both 'Shrub' and 'Shrub_SubShrub' as growth habits if 'Shrub_SubShrub' is a 
 Code Tag of 'Shrub'). Assumes that the Duration_GrowthHabit_Combinations table is populated. */
-CREATE VIEW Duration_GrowthHabitSub_Combinations_ghTags AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabitSub_Combinations_ghTags AS
     SELECT a.Tag AS GHTag,
            b.DurationTag AS Duration
       FROM CodeTags AS a
@@ -294,7 +268,7 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_ghTags AS
 /* While all 'valid' GrowthHabitSub and Durations have been combined in Duration_GrowthHabitSub_Combinations_Final, they still need to be 
 filtered out by the 'Use' field in CodeTags, which tells the query whether or not the database wants to use that particular Tag. This view accomplishes 
 that. */
-CREATE VIEW Duration_GrowthHabitSub_Combinations_Use AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabitSub_Combinations_Use AS
     SELECT a.GHTag,
            a.DurationTag,
            b.Use AS GHUse,
@@ -317,7 +291,7 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_Use AS
 /* Provides a simple and easy to utilize list of valid GrowthHabitSubs where Duration is not being considered. Also provides a way to parse out 
 which GrowthHabitSubs need to be in queries that construct an 'All' duration.  If a GrowthHabitSub has a duration count of 1, it is left out of 
 constructors of the 'All' duration because identical data exists for it in the duration specific version of that query.*/
-CREATE VIEW Duration_GrowthHabitSub_Combinations_Use_Count AS
+CREATE VIEW IF NOT EXISTS Duration_GrowthHabitSub_Combinations_Use_Count AS
     SELECT GHTag,
            Count(GHTag) AS GHCount
       FROM Duration_GrowthHabitSub_Combinations_Use
@@ -326,7 +300,7 @@ CREATE VIEW Duration_GrowthHabitSub_Combinations_Use_Count AS
 	 
 -- View: Duration_SpeciesTags
 /* Provides a list of combination of species tags and durations.  Only returns existing combinations. This assumes an error free Species List. */
-CREATE VIEW Duration_SpeciesTags AS
+CREATE VIEW IF NOT EXISTS Duration_SpeciesTags AS
     SELECT a.Tag,
            b.Duration
       FROM SpeciesTags AS a
@@ -340,7 +314,7 @@ CREATE VIEW Duration_SpeciesTags AS
 			  
 -- View: Duration_SpeciesTags_Combinations_Use
 /* Passes the results of Duration_SpeciesTags through CodeTags to get Duration Code Tags marked as Use. */
-CREATE VIEW Duration_SpeciesTags_Combinations_Use AS
+CREATE VIEW IF NOT EXISTS Duration_SpeciesTags_Combinations_Use AS
     SELECT a.Tag AS SpeciesTag,
            b.Tag AS DurationTag
       FROM Duration_SpeciesTags AS a
@@ -355,7 +329,7 @@ CREATE VIEW Duration_SpeciesTags_Combinations_Use AS
 /* Provides a simple and easy to utilize list of valid SpeciesTags where Duration is not being considered. Also provides a way to parse out 
 which SpeciesTags need to be in queries that construct an 'All' duration.  If a SpeciesTag has a duration count of 1, it is left out of 
 constructors of the 'All' duration because identical data exists for it in the duration specific version of that query.*/
-CREATE VIEW Duration_SpeciesTags_Combinations_Use_Count AS
+CREATE VIEW IF NOT EXISTS Duration_SpeciesTags_Combinations_Use_Count AS
     SELECT SpeciesTag,
            Count(DurationTag) AS DurationCount
       FROM Duration_SpeciesTags_Combinations_Use
@@ -364,7 +338,7 @@ CREATE VIEW Duration_SpeciesTags_Combinations_Use_Count AS
 	 
 -- View: IIRH_Raw
 /* Provides a raw IIRH output for reports. */
-CREATE VIEW IIRH_Raw AS
+CREATE VIEW IF NOT EXISTS IIRH_Raw AS
     SELECT d.SiteKey,
            c.PlotKey,
            a.RecKey,
@@ -459,7 +433,7 @@ CREATE VIEW IIRH_Raw AS
 			  
 -- View: joinSitePlot
 /* A simple constructor joining Sites and Plots. Used as a base for other views. */
-CREATE VIEW joinSitePlot AS
+CREATE VIEW IF NOT EXISTS joinSitePlot AS
     SELECT a.SiteKey,
            a.SiteID,
            a.SiteName,
@@ -473,7 +447,7 @@ CREATE VIEW joinSitePlot AS
 	 
 -- View: joinSitePlotLine
 /* A simple constructor joining Sites, Plots and Lines. Used as a base for other views. */
-CREATE VIEW joinSitePlotLine AS
+CREATE VIEW IF NOT EXISTS joinSitePlotLine AS
     SELECT a.SiteKey,
            a.SiteID,
            a.SiteName,
@@ -492,7 +466,7 @@ CREATE VIEW joinSitePlotLine AS
 -- View: LI_Detail_View
 /* This view serves as a way to combine Detail table information for Gap Intercept, Continuous Line Intercept, and Canopy Gap w/ Species.
 As they are all very similar line intercept methods, it makes sense to process them together. */
-CREATE VIEW LI_Detail_View AS
+CREATE VIEW IF NOT EXISTS LI_Detail_View AS
     SELECT RecKey,
            'Gap Intercept' AS Method,
            CASE WHEN RecType = 'C' THEN 'Canopy' WHEN RecType = 'B' THEN 'Basal' ELSE 'Unknown' END AS SegType,
@@ -531,7 +505,7 @@ CREATE VIEW LI_Detail_View AS
 -- View: LI_Header_View
 /* This view serves as a way to combine Header table information for Gap Intercept, Continuous Line Intercept, and Canopy Gap w/ Species.
 As they are all very similar line intercept methods, it makes sense to process them together. */
-CREATE VIEW LI_Header_View AS
+CREATE VIEW IF NOT EXISTS LI_Header_View AS
     SELECT LineKey,
            RecKey,
            DateModified,
@@ -627,7 +601,7 @@ CREATE VIEW LI_Header_View AS
 			  
 -- View: LI_Line_Cover
 /* Splits off LI Pct Cover information and formats it so it can be a precursor to the final products. */
-CREATE VIEW LI_Line_Cover AS
+CREATE VIEW IF NOT EXISTS LI_Line_Cover AS
 SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID, a.LineID, b.FormDate,
        c.Method, c.LineLengthAmount AS LineSize, c.LengthUnits AS LineSizeUnits, c.Duration,
        c.IndicatorCategory, c.Indicator, c.InterceptType AS HitCategory, c.LengthSum AS IndicatorSum,
@@ -639,7 +613,7 @@ SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID, a.LineID, 
 			  
 -- View: LI_Line_Height
 /* Splits off LI Height information and formats it so it can be a precursor to the final products. */
-CREATE VIEW LI_Line_Height AS
+CREATE VIEW IF NOT EXISTS LI_Line_Height AS
     SELECT a.SiteKey,
            a.PlotKey,
            a.LineKey,
@@ -676,7 +650,7 @@ CREATE VIEW LI_Line_Height AS
 			  
 -- View: LI_Line_Length
 /* Splits off LI Length information and formats it so it can be a precursor to the final products. */
-CREATE VIEW LI_Line_Length AS
+CREATE VIEW IF NOT EXISTS LI_Line_Length AS
     SELECT a.SiteKey,
            a.PlotKey,
            a.LineKey,
@@ -713,7 +687,7 @@ CREATE VIEW LI_Line_Length AS
 			  
 -- View: LI_LineCalc
 /* Takes the calculated LI indicators and converts to the correct units (if necessary) and also calculates percent cover. */
-CREATE VIEW LI_LineCalc AS
+CREATE VIEW IF NOT EXISTS LI_LineCalc AS
 SELECT a.LineKey, b.RecKey, b.Method,
            b.SegType AS InterceptType,
            (a.LineLengthAmount * c.ConvertFactor) AS LineLengthAmount,
@@ -742,7 +716,7 @@ SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicat
 SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
   FROM LI_PlotsLinesForms AS a,
        NonSpeciesIndicators AS b
- WHERE a.Method = 'Canopy Gap with Species';
+ WHERE a.Method = 'Canopy Gap with Species'
 
  UNION
 SELECT a.RecKey, a.Method, a.SegType, b.IndicatorCategory, b.Duration, b.Indicator
@@ -761,7 +735,7 @@ SELECT y.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicat
  
 --View: LI_Line_Indicators_Plot
 /* Creates a Plot/Method level set of indicators for later processing. Used to convert missind data to zeros later.*/
-CREATE VIEW LI_Line_Indicators_Plot AS
+CREATE VIEW IF NOT EXISTS LI_Line_Indicators_Plot AS
 SELECT z.RecKey, x.Method, x.SegType, x.IndicatorCategory, x.Duration, x.Indicator
 FROM  (SELECT * 
          FROM (SELECT d.PlotKey, 
@@ -780,7 +754,7 @@ FROM  (SELECT *
 		  
 -- View: LI_LineSum_Indicators
 /* Joins full indicator list for LI with existing Line data. Replaces NULL Lengths with zeros. */
-CREATE VIEW LI_LineSum_Indicators AS
+CREATE VIEW IF NOT EXISTS LI_LineSum_Indicators AS
 SELECT a.RecKey, a.Method, a.IndicatorCategory, a.Duration, a.Indicator, a.SegType,
        CASE WHEN b.LengthMean IS NULL THEN 0 
             ELSE b.LengthMean END AS LengthMean,
@@ -799,7 +773,7 @@ SELECT a.RecKey, a.Method, a.IndicatorCategory, a.Duration, a.Indicator, a.SegTy
 -- View: LI_Plot_Species
 -- UNUSED
 /* Creates a list of species used by each plot where LI is used. */
-CREATE VIEW LI_Plot_Species AS
+CREATE VIEW IF NOT EXISTS LI_Plot_Species AS
 SELECT a.PlotKey, b.Method, c.SegType,
        CASE WHEN d.Duration IS NULL THEN 'NA' ELSE d.Duration END AS Duration,
        CASE WHEN d.CodeType = 'generic' THEN 'Unidentified ' || d.ScientificName || ' (' || d.SpeciesCode || ')' 
@@ -817,7 +791,7 @@ SELECT a.PlotKey, b.Method, c.SegType,
 			  
 -- View: LI_PlotsLinesForms
 /* Used as a precursor to construct an full indicator list for each line for Line Intercept methods. */
-CREATE VIEW LI_PlotsLinesForms AS
+CREATE VIEW IF NOT EXISTS LI_PlotsLinesForms AS
 SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID,  a.LineID,
        b.Method, b.FormDate, c.SegType
   FROM joinSitePlotLine AS a
@@ -827,7 +801,7 @@ SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.PlotID,  a.LineID,
 			  
 -- View: LI_Raw_Final
 /* Constructs a recordset for the Line Intercept raw data report. */
-CREATE VIEW LI_Raw_Final AS
+CREATE VIEW IF NOT EXISTS LI_Raw_Final AS
     SELECT e.SiteID,
            e.SiteName,
            d.PlotID,
@@ -851,7 +825,7 @@ CREATE VIEW LI_Raw_Final AS
 			  
 -- View: Line_Definition
 /* Constructs a recordset for the Line Definition raw data report. */
-CREATE VIEW Line_Definition AS
+CREATE VIEW IF NOT EXISTS Line_Definition AS
     SELECT c.SiteKey,
            b.PlotKey,
            a.LineKey,
@@ -889,7 +863,7 @@ CREATE VIEW Line_Definition AS
 -- View: LPI_CanopyDefinitions
 /* Serves to define what consitutes Cover, Bare, and Bare Litter cover types. Used to delineate surface categories in 
 LPI_CanopyLayers_Point_SoilSurface_CvrCat */
-CREATE VIEW LPI_CanopyDefinitions AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyDefinitions AS
 SELECT *,
        CASE WHEN instr(CategoryConcat, 'Top') != 0 THEN 'Cover' 
             WHEN (instr(CategoryConcat, 'Top') = 0 AND instr(CategoryConcat, 'Lower') != 0) THEN 'Bare Litter' 
@@ -899,7 +873,7 @@ SELECT *,
 -- View: LPI_CanopyDefinitions_CategoryConcat
 /* Essentially concats the existing LPI canopy layers from the raw LPI.  Provides a quick way of determining what data was found 
 at each point and serves as a precursor to LPI_CanopyDefinitions */
-CREATE VIEW LPI_CanopyDefinitions_CategoryConcat AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyDefinitions_CategoryConcat AS
 SELECT RecKey, PointNbr,
        group_concat(Category, ';') AS CategoryConcat
   FROM LPI_CanopyLayers_Point_DB_RestrictDates
@@ -907,7 +881,7 @@ SELECT RecKey, PointNbr,
 			  
 -- View: LPI_CanopyLayers_Point_DB_RestrictDates
 /* Restricts LPI data by the allowed date range */
-CREATE VIEW LPI_CanopyLayers_Point_DB_RestrictDates AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_DB_RestrictDates AS
 SELECT a.*
   FROM lpi_detail AS a
  INNER JOIN tblLPIHeader AS b ON a.RecKey = b. RecKey
@@ -920,7 +894,7 @@ SELECT a.*
 Uses the CodeTags table to define and convert durations (i.e. annual duration may become annual_biennial if set up that way 
 in CodeTags). Each UNION provides a different Hit Category (First, Any, Basal, Height). See additional comments inside 
 statement. */
-CREATE VIEW LPI_CanopyLayers_Point_Duration_Foliar AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Duration_Foliar AS
 SELECT RecKey, PointNbr, c.Tag AS Duration,
        'Cover' AS IndicatorCategory,
        'Foliar' AS Indicator,
@@ -1008,7 +982,7 @@ Also uses the Duration_GrowthHabit_Combinations_Use view to define desired Growt
 to more clearly differentiate the results from the GrowthHabitSub category (GrowthHabit -> Lignification and GrowthHabitSub -> 
 Growth Habit).  Each UNIONED statement provides a separate Hit Category (Any, First, Basal, Height). See inside statement 
 for further comment. */
-CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabit AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Duration_GrowthHabit AS
 SELECT RecKey, PointNbr,
        e.Tag AS Duration,
        'Lignification' AS IndicatorCategory,
@@ -1107,7 +1081,7 @@ Also uses the Duration_GrowthHabitSub_Combinations_Use view to define desired Gr
 (See Duration_GrowthHabitSub_Combinations_Use for more information). Results are given the 'Growth Habit' IndicatorCategory 
 to more clearly differentiate the results from the GrowthHabit category (GrowthHabit -> Lignification and GrowthHabitSub -> 
 Growth Habit). Each UNIONED statement provides a separate Hit Category (Any, First, Basal, Height). */
-CREATE VIEW LPI_CanopyLayers_Point_Duration_GrowthHabitSub AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Duration_GrowthHabitSub AS
 SELECT RecKey, PointNbr,
        e.Tag AS Duration,
        'Growth Habit' AS IndicatorCategory,
@@ -1192,7 +1166,7 @@ Uses the CodeTags table to define and convert durations (i.e. annual duration ma
 in CodeTags). Also uses the Duration_SpeciesTags_Combinations_Use view to define desired species tags and duration combinations. 
 (See Duration_SpeciesTags_Combinations_Use for more information). Each UNIONED statement provides a separate Hit Category 
 (Any, First, Basal, Height). */
-CREATE VIEW LPI_CanopyLayers_Point_Duration_SpeciesTags AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Duration_SpeciesTags AS
 SELECT RecKey, PointNbr,
        d.Tag AS Duration,
        'Species Tag' AS IndicatorCategory,
@@ -1262,7 +1236,7 @@ SELECT RecKey, PointNbr,
 -- View: LPI_CanopyLayers_Point_Foliar
 /* Serves to define whether each LPI point has foliar cover at it (non-duration specific). Each UNION provides a different 
 Hit Category (First, Any, Basal, Height). See additional comments inside statement. */
-CREATE VIEW LPI_CanopyLayers_Point_Foliar AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Foliar AS
 SELECT RecKey, PointNbr,
        'All' AS Duration,
        'Cover' AS IndicatorCategory,
@@ -1319,7 +1293,7 @@ HAVING Height <> 0;
 -- View: LPI_CanopyLayers_Point_GroundCover
 /* Serves to define whether each LPI point has ground cover at it. Uses the CodeTags table to define what non-species codes
 constitute ground cover and includes any point with a valid species hit (in tblSpecies) also as ground cover. */
-CREATE VIEW LPI_CanopyLayers_Point_GroundCover AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_GroundCover AS
 SELECT RecKey, PointNbr,
        'NA' AS Duration,
        'Cover' AS IndicatorCategory,
@@ -1346,7 +1320,7 @@ i.e. Tags with only a single duration are not used because their data already ex
 the 'Lignification' IndicatorCategory to more clearly differentiate the results from the GrowthHabitSub category 
 (GrowthHabit -> Lignification and GrowthHabitSub -> Growth Habit).  Each UNIONED statement provides a separate Hit Category 
 (Any, First, Basal, Height). See inside statement for further comment. */
-CREATE VIEW LPI_CanopyLayers_Point_GrowthHabit AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_GrowthHabit AS
 SELECT RecKey, PointNbr,
        'All' AS Duration,
        'Lignification' AS IndicatorCategory,
@@ -1447,7 +1421,7 @@ for more information). Results are given the 'Growth Habit' IndicatorCategory to
 GrowthHabit category (GrowthHabit -> Lignification and GrowthHabitSub -> Growth Habit).  Each UNIONED statement provides a separate 
 Hit Category (Any, First, Basal, Height). See inside statement 
 for further comment. */
-CREATE VIEW LPI_CanopyLayers_Point_GrowthHabitSub AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_GrowthHabitSub AS
 SELECT RecKey, PointNbr,
        'All' AS Duration,
        'Growth Habit' AS IndicatorCategory,
@@ -1525,7 +1499,7 @@ SELECT RecKey, PointNbr,
 			  
 -- View: LPI_CanopyLayers_Point_Litter
 /* Gives information on whether Litter occurs at each LPI point.  Uses the CodeTags table to define what 'Litter' is.*/
-CREATE VIEW LPI_CanopyLayers_Point_Litter AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Litter AS
 SELECT RecKey, PointNbr,
        'NA' AS Duration,
        'Litter' AS IndicatorCategory,
@@ -1543,7 +1517,7 @@ SELECT RecKey, PointNbr,
 -- View: LPI_CanopyLayers_Point_SoilSurface
 /* Gives information on whether each LPI point has soil surface cover. Soil surface is either a basal species hit (in tblSpecies) 
 or listed in the CodeTags table as a Soil Surface code.*/
-CREATE VIEW LPI_CanopyLayers_Point_SoilSurface AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_SoilSurface AS
 SELECT RecKey, PointNbr,
        'NA' AS Duration,
        'Soil Surface' AS IndicatorCategory,
@@ -1563,7 +1537,7 @@ SELECT RecKey, PointNbr,
 -- View: LPI_CanopyLayers_Point_SoilSurface_CvrCat
 /* Gives the same information as LPI_CanopyLayers_Point_SoilSurface but instead of 'Any' as a HitCategory, defines the HitCategory 
  as either Bare, Bare Litter, or cover, as determined by the LPI_CanopyDefinitions view.*/
-CREATE VIEW LPI_CanopyLayers_Point_SoilSurface_CvrCat AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_SoilSurface_CvrCat AS
 SELECT a.RecKey, a.PointNbr, a.Duration,
        'Soil Surface' AS IndicatorCategory,
        a.Indicator, a.ChkBox, a.Height,
@@ -1575,7 +1549,7 @@ SELECT a.RecKey, a.PointNbr, a.Duration,
 -- View: LPI_CanopyLayers_Point_Species
 /* Gives info on species which occur at each LPI point.  Each UNIONED statement provides a separate HitCatgory (Basal, Any First, Height) 
 Most of the complexity of this view arrives from converting plant codes to formmated names. */
-CREATE VIEW LPI_CanopyLayers_Point_Species AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_Species AS
 SELECT RecKey, PointNbr,
        CASE WHEN Duration IS NULL THEN 'NA' 
             ELSE Duration END AS Duration,
@@ -1669,7 +1643,7 @@ Also uses the Duration_SpeciesTags_Combinations_Use_Count view to define desired
 are not used because their data already exists in the duration specific version of this query (e.g. All Sagebrush = Perennial Sagebrush). 
 (See Duration_SpeciesTags_Combinations_Use_Count for more information). Each UNIONED statement provides a separate Hit Category 
 (Any, First, Basal, Height). */
-CREATE VIEW LPI_CanopyLayers_Point_SpeciesTags AS
+CREATE VIEW IF NOT EXISTS LPI_CanopyLayers_Point_SpeciesTags AS
 SELECT RecKey, PointNbr,
        'All' AS Duration,
        'Species Tag' AS IndicatorCategory,
@@ -1731,7 +1705,7 @@ SELECT RecKey, PointNbr,
 			  
 -- View: LPI_Line_Count
 /* Serves as the primary GROUP BY function for converting LPI point information to line totals/averages. */
-CREATE VIEW LPI_Line_Count AS
+CREATE VIEW IF NOT EXISTS LPI_Line_Count AS
 SELECT RecKey, Duration, IndicatorCategory, Indicator, HitCategory,
        Count(PointNbr) AS PointCount,
        Sum(CAST(ChkBox AS FLOAT))/Count(PointNbr) AS ChkPct,
@@ -1742,7 +1716,7 @@ SELECT RecKey, Duration, IndicatorCategory, Indicator, HitCategory,
 -- View: LPI_Line_IndicatorsCalc
 /* Serves as a way to combine a full indicator list with actual line data.  Indicators with a NULL point count are converted to a zero and hight 
 units are converted at this time. Is the final LPI specific line data product. */
-CREATE VIEW LPI_Line_IndicatorsCalc AS
+CREATE VIEW IF NOT EXISTS LPI_Line_IndicatorsCalc AS
 SELECT a.PlotKey, a.LineKey, a.RecKey, a.FormDate,
        'Line-point Intercept' AS Method,
        a.PointCount AS LineSize,
@@ -1765,7 +1739,7 @@ SELECT a.PlotKey, a.LineKey, a.RecKey, a.FormDate,
 -- View: LPI_Line_IndicatorsCartesian
 /* This view creates a recordset of all possible LPI indicators, durations and hit categories (at least those marked for use) and joins it
 with site/plot/line info.  Serves as a constructor for the LPI_Line_IndicatorsCalc view. */
-CREATE VIEW LPI_Line_IndicatorsCartesian AS
+CREATE VIEW IF NOT EXISTS LPI_Line_IndicatorsCartesian AS
 SELECT a.*,
        b.Tag AS Duration,
        'Cover' AS IndicatorCategory,
@@ -1914,7 +1888,7 @@ SELECT a.*,
 
 -- View: LPI_Line_PointCount
 /* Counts up the number of points per line/record for use in calculations. */
-CREATE VIEW LPI_Line_PointCount AS
+CREATE VIEW IF NOT EXISTS LPI_Line_PointCount AS
 SELECT a.PlotKey, a.LineKey, b.RecKey, b.FormDate, Count(c.PointNbr) AS PointCount
   FROM tblLines AS a
  INNER JOIN tblLPIHeader AS b ON a.LineKey = b.LineKey
@@ -1925,7 +1899,7 @@ SELECT a.PlotKey, a.LineKey, b.RecKey, b.FormDate, Count(c.PointNbr) AS PointCou
 -- View: LPI_Plot_Species
 /* Serves as a precursor constructor to LPI_Line_IndicatorsCartesian view, giving a list of all species found on the plot for use in 
 generating a total indicator list. */
-CREATE VIEW LPI_Plot_Species AS
+CREATE VIEW IF NOT EXISTS LPI_Plot_Species AS
 SELECT c.PlotKey, a.Duration, a.Indicator
   FROM LPI_CanopyLayers_Point_Species AS a
  INNER JOIN tblLPIHeader AS b ON a.RecKey = b.RecKey
@@ -1937,7 +1911,7 @@ SELECT c.PlotKey, a.Duration, a.Indicator
  /* Creates a set of all Tag/Durations/Indicators/HitCategories present for every Plot/Method where if ther is multiple seasons gives 
  only the plot with the most reason season.  This is used as a precursor for Cover_Plot, such that missing cover indicators can be 
  replaced with a zero (i.e. an indicator was not found at a plot thus its cover value is zero). */
- CREATE VIEW Cover_Tag_Indicators_Plot AS
+ CREATE VIEW IF NOT EXISTS Cover_Tag_Indicators_Plot AS
  SELECT x.Tag, x.Method, x.Duration, x.IndicatorCategory, x.Indicator, x.HitCategory, y.PlotKey, y.Season, y.Weight
   FROM 
        (SELECT b.Tag, a.Method, a.Duration, a.IndicatorCategory, a.Indicator, a.HitCategory
@@ -1960,7 +1934,7 @@ SELECT a.SiteKey, a.PlotKey, a.LineKey, b.RecKey, a.SiteID, a.SiteName, a.PlotID
 
 -- View: NonSpeciesIndicators
 /* Constructs a list of non-species indicators for use in other queries. */
-CREATE VIEW NonSpeciesIndicators AS
+CREATE VIEW IF NOT EXISTS NonSpeciesIndicators AS
 SELECT 'All' AS Duration,
        'Lignification' AS IndicatorCategory,
        GHTag AS Indicator
@@ -2034,7 +2008,7 @@ SELECT DurationTag AS Duration,
 			  
 -- View: PD_ClassLabels
 /* Converts the wide view of Plant Density labels to a long view. */
-CREATE VIEW PD_ClassLabels AS
+CREATE VIEW IF NOT EXISTS PD_ClassLabels AS
     SELECT PlotKey,
            1 AS ClassNumber,
            PlantDenClass1 AS Label
@@ -2093,7 +2067,7 @@ CREATE VIEW PD_ClassLabels AS
 -- View: PD_Detail_Long
 /* Converts the wide view of the Plant Density Detail table to a long view, which is easier for processing. Also converts the subquad size to 
 Square Meters if given in Square Feet. */
-CREATE VIEW PD_Detail_Long AS
+CREATE VIEW IF NOT EXISTS PD_Detail_Long AS
     SELECT RecKey,
            Quadrat,
            CASE WHEN SubQuadSizeUOM = 1 THEN SubQuadSize ELSE SubQuadSize * 0.092903 END AS SubQuadSize_sqm,
@@ -2173,7 +2147,7 @@ CREATE VIEW PD_Detail_Long AS
 -- View: PD_Line
 /* The workhorse of the Plant Density views. Calulates plants per hectare for the line for multiple indicators. Each UNIONED statement 
 adds a different indicator to the line calulations. See inside statement for more comments.*/
-CREATE VIEW PD_Line AS
+CREATE VIEW IF NOT EXISTS PD_Line AS
     -- Species. Classes (provides class level data).
 	SELECT SiteKey,
            PlotKey,
@@ -2482,7 +2456,7 @@ CREATE VIEW PD_Line AS
 			  
 -- View: PD_Plot
 /* Takes plant density line level data and averages by line. Requires stdev function to be loaded as an extension (classes.py). */
-CREATE VIEW PD_Plot AS
+CREATE VIEW IF NOT EXISTS PD_Plot AS
     SELECT SiteKey,
            PlotKey,
            SiteID,
@@ -2520,7 +2494,7 @@ CREATE VIEW PD_Plot AS
 			  
 -- View: PD_Raw_Final
 /* Creates a raw data table for report purposes, and also as a precursor for further data processing. */
-CREATE VIEW PD_Raw_Final AS
+CREATE VIEW IF NOT EXISTS PD_Raw_Final AS
     SELECT e.SiteKey,
            d.PlotKey,
            c.LineKey,
@@ -2561,7 +2535,7 @@ CREATE VIEW PD_Raw_Final AS
 -- View: PD_Tag
 /* Averages plot level plant density data to the above plot level based on PlotTags.  Requires meanw and stdevw to be loaded as an 
 extension (classes.py). */
-CREATE VIEW PD_Tag AS
+CREATE VIEW IF NOT EXISTS PD_Tag AS
     SELECT a.Tag,
            b.IndicatorCategory,
            b.ClassNumber,
@@ -2589,7 +2563,7 @@ CREATE VIEW PD_Tag AS
 			  
 -- View: Plot_Definition
 /* Creates a raw data output of plot definition data for report purposes. */
-CREATE VIEW Plot_Definition AS
+CREATE VIEW IF NOT EXISTS Plot_Definition AS
     SELECT a.SiteKey,
            a.PlotKey,
            b.SiteID,
@@ -2668,7 +2642,7 @@ CREATE VIEW Plot_Definition AS
 			  
 -- View: Plot_Notes
 /* Creates a raw data ouput of plot notes for report purposes. */
-CREATE VIEW Plot_Notes AS
+CREATE VIEW IF NOT EXISTS Plot_Notes AS
     SELECT c.SiteKey,
            b.PlotKey,
            a.CommentID,
@@ -2689,7 +2663,7 @@ CREATE VIEW Plot_Notes AS
 			  
 -- View: SoilPit_Raw
 /* Creates a raw output of soil pit data for report purposes. */
-CREATE VIEW SoilPit_Raw AS
+CREATE VIEW IF NOT EXISTS SoilPit_Raw AS
     SELECT d.SiteKey,
            c.PlotKey,
            a.SoilKey,
@@ -2774,7 +2748,7 @@ CREATE VIEW SoilPit_Raw AS
 -- View: SoilStab_Line
 /* Parses out soil stability data at a line level.  Soil stablity data is a plot level method, but contains line level information. 
 Each UNIONED statement provides a separate line level indicator. Requires the stdev function to be loaded as an extention (classes.py). */
-CREATE VIEW SoilStab_Line AS
+CREATE VIEW IF NOT EXISTS SoilStab_Line AS
 	-- Growth Habit (from SoilStab_Codes).
     SELECT d.SiteKey,
            c.PlotKey,
@@ -2912,7 +2886,7 @@ CREATE VIEW SoilStab_Line AS
 			  
 -- View: SoilStab_Plot
 /* Provides Soil Stability data at a plot level. EACH UNIONED statement provides a different indicator. */
-CREATE VIEW SoilStab_Plot AS
+CREATE VIEW IF NOT EXISTS SoilStab_Plot AS
     -- Growth Habit
 	SELECT d.SiteKey,
            c.PlotKey,
@@ -3040,7 +3014,7 @@ CREATE VIEW SoilStab_Plot AS
 			  
 -- View: SoilStab_Raw_Final
 /* Provides raw soil stability data for report purposes. */
-CREATE VIEW SoilStab_Raw_Final AS
+CREATE VIEW IF NOT EXISTS SoilStab_Raw_Final AS
     SELECT d.SiteID,
            d.SiteName,
            c.PlotID,
@@ -3072,7 +3046,7 @@ CREATE VIEW SoilStab_Raw_Final AS
 			  
 -- View: SoilStab_Tag
 /* Creates above plot averages for soil stability data. Requires the meanw and stdevw functions to be loaded as extensions (classes.py). */
-CREATE VIEW SoilStab_Tag AS
+CREATE VIEW IF NOT EXISTS SoilStab_Tag AS
     SELECT a.Tag,
            b.IndicatorCategory,
            b.Duration,
@@ -3095,7 +3069,7 @@ CREATE VIEW SoilStab_Tag AS
 			  
 -- View: SoilStabDetail_Long
 /* Creates a long version of the soil stability detail table, which allows for easier processing. */
-CREATE VIEW SoilStabDetail_Long AS
+CREATE VIEW IF NOT EXISTS SoilStabDetail_Long AS
     SELECT RecKey,
            CAST (BoxNum AS NUMERIC) AS BoxNumber,
            Line1 AS Line,
@@ -3372,7 +3346,7 @@ CREATE VIEW SoilStabDetail_Long AS
 			  
 -- View: SpeciesList
 /* Creates a raw output of the Species table for report purposes. */
-CREATE VIEW SpeciesList AS
+CREATE VIEW IF NOT EXISTS SpeciesList AS
     SELECT a.SpeciesCode,
            a.ScientificName,
            a.CommonName,
@@ -3390,7 +3364,7 @@ CREATE VIEW SpeciesList AS
 		   
 -- View: SR_Line
 /* Combines the output of SR_Line_Count and SR_Line_Mean into the final Species Richness line product. */
-CREATE VIEW SR_Line AS
+CREATE VIEW IF NOT EXISTS SR_Line AS
     SELECT a.*,
            CASE WHEN b.subPlot_n IS NULL THEN 0 ELSE b.subPlot_n END AS subPlot_n,
            CASE WHEN b.MeanSpecies_n IS NULL THEN 0 ELSE b.MeanSpecies_n END AS MeanSpecies_n
@@ -3409,7 +3383,7 @@ CREATE VIEW SR_Line AS
 			  
 -- View: SR_Line_Count
 /* Provides a count of unique species/species categories per line. Separate UNION statements provide individual indicators. */
-CREATE VIEW SR_Line_Count AS
+CREATE VIEW IF NOT EXISTS SR_Line_Count AS
 SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, FormDate,
        'Species' AS IndicatorCategory,
        Duration,
@@ -3510,7 +3484,7 @@ SELECT SiteKey, PlotKey, LineKey, RecKey, SiteID, SiteName, PlotID, LineID, Form
 -- View: SR_Line_Mean
 /* Provides the mean number of species found per line.  Each UNIONED statement provides a separate indicator. Urilizes SR_SubPlot for the core 
 of the workload. */
-CREATE VIEW SR_Line_Mean AS
+CREATE VIEW IF NOT EXISTS SR_Line_Mean AS
 SELECT x.*,
        Count(y.subPlotID) AS subPlot_n,
        Avg(CASE WHEN y.Species_n IS NULL THEN 0 ELSE y.Species_n END) AS MeanSpecies_n
@@ -3533,7 +3507,7 @@ SELECT x.*,
 			  
 -- View: SR_List_Line
 /* Creates a list of Species Richness species found specifically within each line.*/
-CREATE VIEW SR_List_Line AS
+CREATE VIEW IF NOT EXISTS SR_List_Line AS
     SELECT x.SiteKey,
            x.PlotKey,
            x.LineKey,
@@ -3594,7 +3568,7 @@ CREATE VIEW SR_List_Line AS
 			  
 -- View: SR_List_Plot
 /* Creates a Species Richness list of species found specifically within each plot. */
-CREATE VIEW SR_List_Plot AS
+CREATE VIEW IF NOT EXISTS SR_List_Plot AS
     SELECT x.SiteKey,
            x.PlotKey,
            x.SiteID,
@@ -3654,7 +3628,7 @@ CREATE VIEW SR_List_Plot AS
 			  
 -- View: SR_List_Tag
 /* Creates a Species Richness list of species found specifically within each Tag (PlotTags). */
-CREATE VIEW SR_List_Tag AS
+CREATE VIEW IF NOT EXISTS SR_List_Tag AS
     SELECT x.Tag,
            x.SpeciesCode,
            CASE WHEN y.Duration IS NULL THEN 'NA' ELSE y.Duration END AS Duration,
@@ -3694,7 +3668,7 @@ CREATE VIEW SR_List_Tag AS
 			  
 -- View: SR_Plot
 /* Final product for Species Richness at plot level.  Combines data from SR_Plot_Mean and SR_Plot_Count. */
-CREATE VIEW SR_Plot AS
+CREATE VIEW IF NOT EXISTS SR_Plot AS
     SELECT a.*,
            CASE WHEN b.line_n IS NULL THEN 0 ELSE b.line_n END AS line_n,
            CASE WHEN b.MeanSpecies_n IS NULL THEN 0 ELSE b.MeanSpecies_n END AS MeanSpecies_n
@@ -3713,7 +3687,7 @@ CREATE VIEW SR_Plot AS
 			  
 -- View: SR_Plot_Count
 /* Provides count for unique species/categories on a per plot basis.  Each separate UNIONED statement provides a separate indicator. */
-CREATE VIEW SR_Plot_Count AS
+CREATE VIEW IF NOT EXISTS SR_Plot_Count AS
     -- Species.
 	SELECT SiteKey,
            PlotKey,
@@ -3893,7 +3867,7 @@ CREATE VIEW SR_Plot_Count AS
 -- View: SR_Plot_Mean
 /* Provides the mean number of species/category at a plot level (e.g. if Line 1 has 12 species, Line 2 has 4 species and Line 3 has 8 species 
 then the plot mean would be 8 species. */
-CREATE VIEW SR_Plot_Mean AS
+CREATE VIEW IF NOT EXISTS SR_Plot_Mean AS
     SELECT x.SiteKey AS SiteKey,
            x.PlotKey AS PlotKey,
            x.SiteID AS SiteID,
@@ -3961,7 +3935,7 @@ CREATE VIEW SR_Plot_Mean AS
 			  
 -- View: SR_Raw_Final
 /* Serves as a raw Species Richness output for reporting purposes as well as a base for other Species Richness views.*/
-CREATE VIEW SR_Raw_Final AS
+CREATE VIEW IF NOT EXISTS SR_Raw_Final AS
     SELECT f.SiteID,
            f.SiteName,
            e.PlotID,
@@ -4000,7 +3974,7 @@ CREATE VIEW SR_Raw_Final AS
 -- View: SR_SubPlot
 /* Provides sprecies richness count information for each species/category for each subplot.  Each UNIONED statement provides 
 a separate indicator. */
-CREATE VIEW SR_SubPlot AS
+CREATE VIEW IF NOT EXISTS SR_SubPlot AS
 SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKey AS RecKey,
        f.SiteID AS SiteID, f.SiteName AS SiteName, e.PlotID AS PlotID, d.LineID AS LineID,
        c.FormDate AS FormDate, a.subPlotID,
@@ -4179,7 +4153,7 @@ SELECT f.SiteKey AS SiteKey, e.PlotKey AS PlotKey, d.LineKey AS Linekey, a.RecKe
 			  
 -- View: SR_Tag
 /* Serves as the final product for species richness above plot level.  Combines data from SR_Tag_Count and SR_Tag_Mean. */
-CREATE VIEW SR_Tag AS
+CREATE VIEW IF NOT EXISTS SR_Tag AS
     SELECT a.*,
            CASE WHEN b.Plot_n IS NULL THEN 0 ELSE b.Plot_n END AS Plot_n,
            CASE WHEN b.MeanSpecies_n IS NULL THEN 0 ELSE b.MeanSpecies_n END AS MeanSpecies_n
@@ -4195,7 +4169,7 @@ CREATE VIEW SR_Tag AS
 			  
 -- View: SR_Tag_Count
 /* Provides counts of unique species within categoies for Tags (PlotTags). Each UNIONED statement provides a separate indicator. */
-CREATE VIEW SR_Tag_Count AS
+CREATE VIEW IF NOT EXISTS SR_Tag_Count AS
     -- Species.
 	SELECT Tag,
            'Species' AS IndicatorCategory,
@@ -4326,7 +4300,7 @@ CREATE VIEW SR_Tag_Count AS
 -- View: SR_Tag_Mean
 /* Provides a mean number of unique species per category per Tag (PlotTags) e.g. If Plot A has 12 unique species and Plot B has 
 6 unique species and both have the same PlotTag, then that Tag will have a unique species mean of 9.*/
-CREATE VIEW SR_Tag_Mean AS
+CREATE VIEW IF NOT EXISTS SR_Tag_Mean AS
     SELECT x.Tag AS Tag,
            x.IndicatorCategory AS IndicatorCategory,
            x.Duration AS Duration,
@@ -4385,7 +4359,7 @@ CREATE VIEW SR_Tag_Mean AS
 -- View: UnitConversion_Use
 /* Gets the units choice from the Data_DBconfig table and restricts the UnitConversion to those choices.  Used to convert from one set of 
 units to another within views.*/
-CREATE VIEW UnitConversion_Use AS
+CREATE VIEW IF NOT EXISTS UnitConversion_Use AS
     SELECT *
       FROM UnitConversion
      WHERE MeasureChoice = (
@@ -4396,7 +4370,7 @@ CREATE VIEW UnitConversion_Use AS
 
 --Exports_All
 /* Provides a combined list of exports for both regular and QAQC reports. */
-CREATE VIEW Exports_All AS
+CREATE VIEW IF NOT EXISTS Exports_All AS
 SELECT Category, DataType, Scale, ObjectName, ExportName, Null AS Function, Null AS QueryOrder
   FROM Exports
  UNION
