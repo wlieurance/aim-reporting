@@ -12,3 +12,9 @@ pip-delete-this-directory.txt
 
 # project specific
 vardict.json
+
+# tags
+tags
+
+# pycharm
+.idea/
