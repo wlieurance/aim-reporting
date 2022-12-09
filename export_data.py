@@ -196,8 +196,12 @@ class ExportForm:
                     # use by other parts of the loop. may still work with extra tweaking.
                     obj = '_'.join(("temp", row["ObjectName"]))
                     self.connection.execute("DROP TABLE IF EXISTS {!s};".format(obj))
-                    self.connection.execute("CREATE TEMPORARY TABLE {!s} AS "
-                                            "SELECT * FROM {!s};".format(obj, row["ObjectName"]))
+                    try:
+                        self.connection.execute("CREATE TEMPORARY TABLE {!s} AS "
+                                                "SELECT * FROM {!s};".format(obj, row["ObjectName"]))
+                    except sqlite.OperationalError:
+                        print("Error exporting ", row["ObjectName"], ". Skipping...", sep="")
+                        continue
                     
                     # Figures out how many rows are in a query to be exported and then creates the relevant recordset.
                     # Unfortunately due to the size and complexity of some views this has produced MemoryError
