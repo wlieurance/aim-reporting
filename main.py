@@ -69,7 +69,7 @@ class MainForm:
     # function to select which sqlite file the code is interacting with.
     def choose_RD(self):
         path = tkinter.filedialog.askopenfilename(title="Choose Reporting Database to use:",
-                                                  filetypes=(("sqlite files", "*.sqlite;*.db"), ("All files", "*.*")))
+                                                  filetypes=(("sqlite files", "*.sqlite *.db"), ("All files", "*.*")))
         if path:
             print("Changing path")
             var['RDpath'] = os.path.abspath(path)
@@ -252,9 +252,15 @@ class MainForm:
                 # runs process SQL script to generate intermediate data in the database.
                 root.config(cursor="watch")
                 root.update()
-                run_sqlscript(conn, script_path=os.path.join(var['SQLpath'], 'process.sql'), form=self,
-                              msg=r'Doing calculations on intermediate data...')
-                tkinter.messagebox.showinfo("Done.", "Recalculations complete.")
+                sp = os.path.join(var['SQLpath'], 'process.sql')
+                cwd = os.getcwd()
+                if not os.path.isfile(sp):
+                    tkinter.messagebox.showerror("Error", f"SQL file: {sp} does not exist. "
+                                                          f"Please update vardict.json SQLpath. \n\nCWD: {cwd}")
+                else:
+                    run_sqlscript(conn, script_path=os.path.join(var['SQLpath'], 'process.sql'), form=self,
+                                  msg=r'Doing calculations on intermediate data...')
+                    tkinter.messagebox.showinfo("Done.", "Recalculations complete.")
                 self.lblAction['text'] = ''
                 self.lblAction.update_idletasks()
                 conn.close()
@@ -280,6 +286,14 @@ if not os.path.isfile('vardict.json'):
 else:
     with open('vardict.json', 'r') as in_file:
         var = json.load(in_file)
+        for p in ['RDpath', 'DIMApath', 'WMMpath', 'SQLpath']:
+            if var[p] is not None:
+                if p != 'SQLpath':
+                    if not os.path.isfile(var[p]):
+                        var[p] = None
+                else:
+                    if not os.path.isdir(var[p]):
+                        var[p] = os.path.join(scriptdir, 'sql')
 
 # creates and displays the main form
 root = tkinter.Tk()
