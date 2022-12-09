@@ -18,7 +18,7 @@ def check_compatible(path):
 
     # should put the newer ACE driver {Microsoft Access Driver (*.mdb, *.accdb)} first
     drivers = sorted([x for x in pyodbc.drivers() if x.startswith('Microsoft Access Driver')], reverse=True)
-    if not ret['odbc_drivers']:
+    if not drivers:
         try_mdbtools = True
     else:
         driver = drivers[0]
