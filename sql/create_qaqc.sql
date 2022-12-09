@@ -3,7 +3,7 @@ BEGIN TRANSACTION;
 
 --QAQC_Plot_Methods_FormNumberCheck
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
-VALUES(1.0,'QAQC_Plot_Methods_FormNumberCheck','All Methods','Missing Data','This check will display counts of forms for all methods at the plot level and compare it against a predetermined number of forms that should be present within a season.','Missing Forms for certain methods.','Plot_Methods_FormNumberCheck',NULL,NULL);
+VALUES(1.0,'QAQC_Plot_Methods_FormNumberCheck','General','Missing Data','This check will display counts of forms for all methods at the plot level and compare it against a predetermined number of forms that should be present within a season.','Missing Forms for certain methods.','Plot_Methods_FormNumberCheck',NULL,NULL);
 
 CREATE VIEW QAQC_Plot_Methods_FormNumberCheck AS
     SELECT x.SiteID,
@@ -166,7 +166,7 @@ CREATE VIEW QAQC_Plot_Methods_FormNumberCheck AS
 	 
 --QAQC_Plot_Methods_FormDateCheck
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
-VALUES(1.0,'QAQC_Plot_Methods_FormDateCheck','All Methods','Data Criterion Failure','Method data within the same plot have different form dates.  Minimum Criteria is for Soil Pit form date for projects with legacy soil pit information.','If methods are done on different days or if there is multiple years data in the database, this check will return valid dates.  All form dates are given for plots such that possible incorrect dates can be identified from the list.','Plot_Methods_FormDateCheck',NULL,NULL);
+VALUES(1.0,'QAQC_Plot_Methods_FormDateCheck','General','Data Criterion Failure','Method data within the same plot have different form dates.  Minimum Criteria is for Soil Pit form date for projects with legacy soil pit information.','If methods are done on different days or if there is multiple years data in the database, this check will return valid dates.  All form dates are given for plots such that possible incorrect dates can be identified from the list.','Plot_Methods_FormDateCheck',NULL,NULL);
 
 CREATE VIEW QAQC_Plot_Methods_FormDateCheck AS
     SELECT q.*,
@@ -378,7 +378,7 @@ CREATE VIEW QAQC_Plot_Methods_FormDateCheck AS
 
 --QAQC_Descriptions_Criteria	  
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
-VALUES(1.0,'QAQC_Descriptions_Criteria','All Methods','Descriptions','This is the description list for QAQC Queries',NULL,'Quality Check Descriptions',NULL,NULL);
+VALUES(1.0,'QAQC_Descriptions_Criteria','General','Descriptions','This is the description list for QAQC Queries',NULL,'Quality Check Descriptions',NULL,NULL);
 
 CREATE VIEW QAQC_Descriptions_Criteria AS
     SELECT QueryName,
@@ -397,7 +397,7 @@ CREATE VIEW QAQC_Descriptions_Criteria AS
 			  
 --QAQC_SpeciesMethods			  
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
-VALUES(1.0,'QAQC_SpeciesMethods','All Methods','Species Tracking','Use this query to identify the lines/plots where a species code occurs in all methods with species codes.',NULL,'SpeciesMethods',NULL,NULL);			  
+VALUES(1.0,'QAQC_SpeciesMethods','General','Species Tracking','Use this query to identify the lines/plots where a species code occurs in all methods with species codes.',NULL,'SpeciesMethods',NULL,NULL);			  
 
 CREATE VIEW QAQC_SpeciesMethods AS
 SELECT x.SiteID, x.SiteName, y.PlotID, z.Season, z.Species,
@@ -5349,7 +5349,7 @@ CREATE VIEW QAQC_SR_Detail_OrphanRecordCheck AS
 	 
 --QAQC_Geographic
 INSERT INTO QAQC_Queries (QueryOrder, QueryName, Method, Function, Description, DescriptionSub, ExportID, Field, CorrectValue) 
-VALUES(0.0,'QAQC_Geographic','All Methods','Data Criterion Failure','A coordinate falls outside of sample area.',NULL,'Geographic','Coord','-120 < x --114, 35 < y < 42, 146 < z < 4007 ');
+VALUES(0.0,'QAQC_Geographic','General','Data Criterion Failure','A coordinate falls outside of sample area.',NULL,'Geographic','Coord','-120 < x --114, 35 < y < 42, 146 < z < 4007 ');
 
 CREATE VIEW QAQC_Geographic AS
     SELECT q.SiteID || ':' || q.PlotID || ':' || q.LineID || ';' || q.CoordType || ';' || q.PointType AS ErrorKey,
