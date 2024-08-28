@@ -10,5 +10,7 @@ pip-delete-this-directory.txt
 # pyenv
 .python-version
 
+# pycharm
+.idea/
 # project specific
 vardict.json
