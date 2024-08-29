@@ -184,11 +184,12 @@ def speciesrichness(connection):
     result = connection.execute("SELECT RecKey, subPlotID, SpeciesList FROM tblSpecRichDetail;")
     for row in result:
         speclist = []
-        species = row[2].split(sep=';')
-        for s in species:
-            if s and row[0] and row[1]:
-                speclist.append((row[0], row[1], s))
-        # print(speclist)
-        connection.executemany('INSERT OR IGNORE INTO SR_Raw VALUES (?,?,?)', speclist)
+        if row[2] is not None:
+            species = row[2].split(sep=';')
+            for s in species:
+                if s and row[0] and row[1]:
+                    speclist.append((row[0], row[1], s))
+            # print(speclist)
+            connection.executemany('INSERT OR IGNORE INTO SR_Raw VALUES (?,?,?)', speclist)
     connection.commit()
 # end function definition
