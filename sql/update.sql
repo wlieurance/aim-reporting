@@ -1,4 +1,4 @@
--- Text encoding used: System
+-- Text encoding used: UTF8
 --
 PRAGMA foreign_keys = off;
 SELECT load_extension('mod_spatialite');
@@ -10,7 +10,7 @@ UPDATE tblSpecies
  WHERE CodeType IS NULL AND 
        (ScientificName IS NOT NULL AND 
         ScientificName <> '') AND 
-       instr(ScientificName, '×') = 0 AND 
+       instr(ScientificName, 'Ã—') = 0 AND 
        (instr(ScientificName, ' ') = 0 OR 
         ScientificName LIKE '% sp.%');
 
@@ -19,7 +19,7 @@ UPDATE tblSpecies
 UPDATE tblSpecies
    SET CodeType = 'hybrid'
  WHERE CodeType IS NULL AND 
-       ScientificName LIKE '%×%';
+       ScientificName LIKE '%Ã—%';
 
 
 --Update tblSpecies to define CodeType as subspecies	   
